@@ -9,6 +9,9 @@ library(dplyr)
 library(readr)
 library(purrr)
 
+```
+```{r}
+
 all_files <- lapply(list.files(path = "./data", pattern = "*.csv", full.names = TRUE), read.csv)
 dta <- do.call(path = "./data", pattern = "*.csv", all_files)
 
