@@ -85,7 +85,18 @@ boxplot(df$Weight, main = "Weight", ylab = "Y-axis Label")
 ---
 Les deux dernières boites à moustache, l'une concernant le poids et l'autre l'âge gestationnel, démontrent une grande similitude.
 On peut donc supposer une corrélation apparente.
+
+Nous allons maintenant visualiser cette corrélation en utilisant un nuage de points. Cela nous permet de visuellement vérifier la présence de valeur aberrante pour le poids, ce qui est compliqué autrement étant donné que celui-ci dépend de la période de gestation.
 ---
+```{r}
+library(ggplot2)
+
+ggplot(df, aes(x = Gestational_age, y = Weight)) +
+        geom_point() +
+        ggtitle("Scatter plot of Weight vs Gestational_age") +
+        xlab("Gestational_age") +
+        ylab("Weight")
+```
 
 ---
 #Préparation des données pour le modèle
