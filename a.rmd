@@ -123,6 +123,7 @@ La fonction scale centre et réduit les données (moyenne de 0 et écart-type de
 ---
 ```{r}
 df_s <- scale(df_e, center = TRUE, scale = TRUE)
+summary(df_s)
 ```
 ```{r}
 
