@@ -14,7 +14,7 @@ library(purrr)
 ```{r}
 
 # List all cv files in the directory Data
-csv_files <- fs::dir_ls("RawData", regexp = "\\.csv$")
+csv_files <- fs::dir_ls("./RawData", regexp = "\\.csv$") # nolint: line_length_linter.
 
 # Read all cv files
 csv_data <- csv_files %>%
@@ -107,10 +107,11 @@ head(df_e)
 ---
 ## 2- Normalisation et standardisation
 
-Nous allons normaliser et standardiser les variables numériques pour les mettre à la même échelle.
+Nous allons normaliser les variables numériques pour les mettre à la même échelle.
+La fonction scale centre et réduit les données (moyenne de 0 et écart-type de 1)
 ---
 ```{r}
-
+df_s <- scale(df_e, center = TRUE, scale = TRUE)
 ```
 ```{r}
 
