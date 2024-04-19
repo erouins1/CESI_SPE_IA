@@ -14,7 +14,7 @@ library(purrr)
 ```{r}
 
 # List all cv files in the directory Data
-csv_files <- fs::dir_ls("/Users/benoitdesbourdieux/Documents/CESI/Data_science/CESI_SPE_IA/RawData", regexp = "\\.csv$") # nolint: line_length_linter.
+csv_files <- fs::dir_ls("RawData", regexp = "\\.csv$")
 
 # Read all cv files
 csv_data <- csv_files %>%
@@ -55,7 +55,9 @@ On supprime la colonne X qui est inutile
 ---
 
 ```{r}
-df <- subset(df, select = -X)
+if ("X" %in% names(df)) {
+  df <- subset(df, select = -X)
+}
 ```
 
 ---

@@ -366,12 +366,12 @@ display: none;
 ##     intersect, setdiff, setequal, union</code></pre>
 <pre class="r"><code>library(readr)
 library(purrr)</code></pre>
-<pre class="r"><code>all_files &lt;- lapply(list.files(path = &quot;RawData&quot;, pattern = &quot;*.csv&quot;, full.names = TRUE), read.csv)
-dta &lt;- do.call(&quot;rbind&quot;, all_files)
+<pre class="r"><code># List all cv files in the directory Data
+csv_files &lt;- fs::dir_ls(&quot;RawData&quot;, regexp = &quot;\\.csv$&quot;)
 
-all_files &lt;- list.files(path = &quot;RawData&quot;, pattern = &quot;*.csv&quot;, full.names = TRUE)
-dta &lt;- do.call(&quot;rbind&quot;, lapply(all_files, read.csv))
-csv_data &lt;- map_dfr(all_files, ~read_csv(.x))</code></pre>
+# Read all cv files
+csv_data &lt;- csv_files %&gt;%
+  map_dfr(read_csv)</code></pre>
 <pre><code>## New names:
 ## Rows: 6000 Columns: 8
 ## ── Column specification
@@ -453,81 +453,55 @@ csv_data &lt;- map_dfr(all_files, ~read_csv(.x))</code></pre>
 ## ℹ Use `spec()` to retrieve the full column specification for this data. ℹ
 ## Specify the column types or set `show_col_types = FALSE` to quiet this message.
 ## • `` -&gt; `...1`</code></pre>
-<pre class="r"><code># Sauvegarder le RawData frame combiné dans un nouveau fichier CSV
-write.csv(dta, &quot;TreatedData/donnees_combinees.csv&quot;, row.names = FALSE)</code></pre>
-<pre class="r"><code># Lire le nouveau fichier CSV
-donnees_lues &lt;- read.csv(&quot;TreatedData/donnees_combinees.csv&quot;)
-
-# Afficher les premières lignes du nouveau RawData frame pour vérification
-head(donnees_lues)</code></pre>
-<pre><code>##      X Maternal_age Maternal_weight Maternal_height Parity    Sex
-## 1 6205        31.77           53.80          158.00   0.00 Female
-## 2 5641        28.54           61.00          165.00   0.00 Female
-## 3 2740        34.89           53.50          163.00   0.00 Female
-## 4 6111        36.56           52.00          160.00   1.00   Male
-## 5 6327        34.31           58.00          156.00   1.00   Male
-## 6 5753        35.32           73.00          170.00   1.00 Female
-##   Gestational_age  Weight
-## 1          143.00  354.27
-## 2          239.59 2641.00
-## 3          247.09 2688.00
-## 4          284.26 3800.00
-## 5          246.29 2594.00
-## 6          148.28  419.11</code></pre>
-<pre class="r"><code>data_d &lt;- distinct(donnees_lues)
+<pre class="r"><code># Afficher les premières lignes du nouveau RawData frame pour vérification
+head(csv_data)</code></pre>
+<pre><code>## # A tibble: 6 × 8
+##    ...1 Maternal_age Maternal_weight Maternal_height Parity Sex   
+##   &lt;dbl&gt;        &lt;dbl&gt;           &lt;dbl&gt;           &lt;dbl&gt;  &lt;dbl&gt; &lt;chr&gt; 
+## 1  6205         31.8            53.8             158      0 Female
+## 2  5641         28.5            61               165      0 Female
+## 3  2740         34.9            53.5             163      0 Female
+## 4  6111         36.6            52               160      1 Male  
+## 5  6327         34.3            58               156      1 Male  
+## 6  5753         35.3            73               170      1 Female
+## # ℹ 2 more variables: Gestational_age &lt;dbl&gt;, Weight &lt;dbl&gt;</code></pre>
+<pre class="r"><code>data_d &lt;- distinct(csv_data)
 write.csv(data_d, &quot;TreatedData/data.csv&quot;, row.names = FALSE)</code></pre>
 <div id="première-analyse-des-données" class="section level2">
 <h2>Première analyse des données</h2>
 <pre class="r"><code>df &lt;- data_d
 summary(df)</code></pre>
-<pre><code>##        X         Maternal_age   Maternal_weight    Maternal_height   
-##  Min.   :   1   Min.   :14.02   Length:9113        Length:9113       
-##  1st Qu.:2279   1st Qu.:30.04   Class :character   Class :character  
-##  Median :4557   Median :33.16   Mode  :character   Mode  :character  
-##  Mean   :4557   Mean   :32.56                                        
-##  3rd Qu.:6835   3rd Qu.:35.74                                        
-##  Max.   :9113   Max.   :46.82                                        
-##     Parity              Sex            Gestational_age     Weight      
-##  Length:9113        Length:9113        Min.   :132.0   Min.   : 150.1  
-##  Class :character   Class :character   1st Qu.:147.2   1st Qu.: 396.6  
-##  Mode  :character   Mode  :character   Median :245.9   Median :2474.0  
-##                                        Mean   :225.5   Mean   :2096.2  
-##                                        3rd Qu.:275.5   3rd Qu.:3100.0  
-##                                        Max.   :301.8   Max.   :4930.0</code></pre>
-<table>
-<tbody>
-<tr class="odd">
-<td>On peut voir ici que certaines colonnes qui doivent être numériques
-sont de type caractère. Nous allons les convertir en numérique.</td>
-</tr>
-</tbody>
-</table>
-<pre class="r"><code>df$Maternal_weight &lt;- as.numeric(df$Maternal_weight)</code></pre>
-<pre><code>## Warning: NAs introduced by coercion</code></pre>
-<pre class="r"><code>head(df$Maternal_weight, 10)</code></pre>
-<pre><code>##  [1] 53.8 61.0 53.5 52.0 58.0 73.0 68.0 84.0 62.0 72.0</code></pre>
-<pre class="r"><code>df$Maternal_height &lt;- as.numeric(df$Maternal_height)</code></pre>
-<pre><code>## Warning: NAs introduced by coercion</code></pre>
-<pre class="r"><code>head(df$Maternal_height, 10)</code></pre>
-<pre><code>##  [1] 158 165 163 160 156 170 164 159 169 154</code></pre>
-<pre class="r"><code>df$Parity &lt;- as.numeric(df$Parity)</code></pre>
-<pre><code>## Warning: NAs introduced by coercion</code></pre>
-<pre class="r"><code>freq_parity &lt;- table(df$Parity)
-print(freq_parity)</code></pre>
-<pre><code>## 
-##    0    1    2    3    4    5    7   10 
-## 4916 3482  591   78   19   15    3    5</code></pre>
+<pre><code>##       ...1       Maternal_age   Maternal_weight  Maternal_height
+##  Min.   :   1   Min.   :14.02   Min.   :  0.00   Min.   :138.0  
+##  1st Qu.:2279   1st Qu.:30.04   1st Qu.: 56.00   1st Qu.:160.0  
+##  Median :4557   Median :33.16   Median : 62.00   Median :163.0  
+##  Mean   :4557   Mean   :32.56   Mean   : 64.05   Mean   :163.5  
+##  3rd Qu.:6835   3rd Qu.:35.74   3rd Qu.: 69.30   3rd Qu.:168.0  
+##  Max.   :9113   Max.   :46.82   Max.   :135.00   Max.   :188.0  
+##                                 NA&#39;s   :3        NA&#39;s   :5      
+##      Parity            Sex            Gestational_age     Weight      
+##  Min.   : 0.0000   Length:9113        Min.   :132.0   Min.   : 150.1  
+##  1st Qu.: 0.0000   Class :character   1st Qu.:147.2   1st Qu.: 396.6  
+##  Median : 0.0000   Mode  :character   Median :245.9   Median :2474.0  
+##  Mean   : 0.5621                      Mean   :225.5   Mean   :2096.2  
+##  3rd Qu.: 1.0000                      3rd Qu.:275.5   3rd Qu.:3100.0  
+##  Max.   :10.0000                      Max.   :301.8   Max.   :4930.0  
+##  NA&#39;s   :4</code></pre>
 <table style="width:6%;">
 <colgroup>
 <col width="5%" />
 </colgroup>
 <tbody>
 <tr class="odd">
+<td>Nous avons 6 colonnes dans notre jeu de données, dont 5 sont
+numériques et 1 est catégorielle.</td>
+</tr>
+<tr class="even">
 <td>Il existe 10 valeurs différentes dans la colonne Parity, et les
 répartitions sont très inégales. Il faudra garder cela en tête lors de
 l’analyse des résultats du modèle.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Dans un cadre éthique, nous vérifions la répartition de chaque sexe
 dans notre jeu de données.</td>
 </tr>
@@ -552,7 +526,9 @@ féminin, ce qui est un bon signe pour l’analyse des données.</td>
 </tr>
 </tbody>
 </table>
-<pre class="r"><code>df &lt;- subset(df, select = -X)</code></pre>
+<pre class="r"><code>if (&quot;X&quot; %in% names(df)) {
+  df &lt;- subset(df, select = -X)
+}</code></pre>
 <table>
 <tbody>
 <tr class="odd">
@@ -563,10 +539,10 @@ colonne</td>
 </table>
 <pre class="r"><code>na_counts &lt;- colSums(is.na(df))
 print(na_counts)</code></pre>
-<pre><code>##    Maternal_age Maternal_weight Maternal_height          Parity             Sex 
-##               0               3               5               4               0 
-## Gestational_age          Weight 
-##               0               0</code></pre>
+<pre><code>##            ...1    Maternal_age Maternal_weight Maternal_height          Parity 
+##               0               0               3               5               4 
+##             Sex Gestational_age          Weight 
+##               0               0               0</code></pre>
 <table>
 <tbody>
 <tr class="odd">
@@ -629,22 +605,22 @@ library(data.table)</code></pre>
 <pre class="r"><code>df$Sex &lt;- as.factor(df$Sex)
 df_e &lt;- one_hot(as.data.table(df))
 head(df_e)</code></pre>
-<pre><code>##    Maternal_age Maternal_weight Maternal_height Parity Sex_Female Sex_Male
-##           &lt;num&gt;           &lt;num&gt;           &lt;num&gt;  &lt;num&gt;      &lt;int&gt;    &lt;int&gt;
-## 1:        31.77            53.8             158      0          1        0
-## 2:        28.54            61.0             165      0          1        0
-## 3:        34.89            53.5             163      0          1        0
-## 4:        36.56            52.0             160      1          0        1
-## 5:        34.31            58.0             156      1          0        1
-## 6:        35.32            73.0             170      1          1        0
-##    Gestational_age  Weight
-##              &lt;num&gt;   &lt;num&gt;
-## 1:          143.00  354.27
-## 2:          239.59 2641.00
-## 3:          247.09 2688.00
-## 4:          284.26 3800.00
-## 5:          246.29 2594.00
-## 6:          148.28  419.11</code></pre>
+<pre><code>##     ...1 Maternal_age Maternal_weight Maternal_height Parity Sex_Female
+##    &lt;num&gt;        &lt;num&gt;           &lt;num&gt;           &lt;num&gt;  &lt;num&gt;      &lt;int&gt;
+## 1:  6205        31.77            53.8             158      0          1
+## 2:  5641        28.54            61.0             165      0          1
+## 3:  2740        34.89            53.5             163      0          1
+## 4:  6111        36.56            52.0             160      1          0
+## 5:  6327        34.31            58.0             156      1          0
+## 6:  5753        35.32            73.0             170      1          1
+##    Sex_Male Gestational_age  Weight
+##       &lt;int&gt;           &lt;num&gt;   &lt;num&gt;
+## 1:        0          143.00  354.27
+## 2:        0          239.59 2641.00
+## 3:        0          247.09 2688.00
+## 4:        1          284.26 3800.00
+## 5:        1          246.29 2594.00
+## 6:        0          148.28  419.11</code></pre>
 <table style="width:6%;">
 <colgroup>
 <col width="5%" />
