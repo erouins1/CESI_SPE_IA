@@ -71,9 +71,11 @@ On supprime la colonne X qui est inutile
 ---
 
 ```{r}
-if ("X" %in% names(df)) {
-  df <- subset(df, select = -X)
+if ("...1" %in% names(df)) {
+  df <- subset(df, select = -1)
 }
+
+head(df)
 ```
 
 ---
@@ -145,8 +147,8 @@ library(mltools)
 library(data.table)
 
 df$Sex <- as.factor(df$Sex)
-df_e <- one_hot(as.data.table(df))
-head(df_e)
+ #df_e <- one_hot(as.data.table(df))
+#head(df_e)
 
 ```
 ---
@@ -156,38 +158,106 @@ Nous allons normaliser les variables numériques pour les mettre à la même éc
 La fonction scale centre et réduit les données (moyenne de 0 et écart-type de 1)
 ---
 ```{r}
-df_s <- scale(df_e, center = TRUE, scale = TRUE)
-summary(df_s)
+library(caret)
+
+# Assuming 'df' is your full dataset
+set.seed(123) # for reproducibility
+splitIndex <- createDataPartition(df$Weight, p = 0.8, list = FALSE)
+
+# Create training and testing datasets
+train_set <- df[splitIndex, ]
+test_set <- df[-splitIndex, ]
+
+```
+```{r}
+head(df)
 ```
 ```{r}
 
-# Assuming df_s was created by scaling
-df_s <- as.data.frame(scale(df_e, center = TRUE, scale = TRUE))
+# Select only numeric columns for scaling
+#numeric_columns <- train_set[, sapply(train_set, is.numeric)]
 
-# Ajuster un modèle de régression polynomiale avec des termes polynomiaux pour plusieurs variables
-modele_poly <- lm(Weight ~ poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
+#scaled_numeric_columns  <- scale(numeric_columns, center = TRUE, scale = TRUE)
+
+# Combine scaled numeric columns back with non-numeric columns
+#df_s <- cbind(df[, sapply(df, Negate(is.numeric))], as.data.frame(scaled_numeric_columns))
+
+
+#summary(df_s)
+
+
+
+```
+```{r}
+# Fit the linear model on the training dataset
+model_linear <- lm(Weight ~ Maternal_age + Maternal_weight +
+        Maternal_height + Parity + Sex + Gestational_age, data = train_set)
+
+# Summary of the model
+summary(model_linear)
+
+# Evaluate the model on the testing dataset
+predictions <- predict(model_linear, newdata = test_set)
+test_mse <- mean((test_set$Weight - predictions)^2)
+print(test_mse)
+```
+
+```{r}
+model_poly <- lm(Weight ~ poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
         poly(Maternal_height, 2) + poly(Parity, 2) +
-        poly(Sex_Male, 1) + poly(Sex_Female, 1) + poly(Gestational_age, 2), data = df_s)
+        poly(Sex, 1) + poly(Gestational_age, 2), data = train_set)
 
-# Afficher le résumé du modèle
-summary(modele_poly)
+summary(model_poly)
 
-# Prédiction et évaluation avec des données de test (si disponibles)
-# predictions <- predict(modele_poly, newdata = donnees_test)
-# mse <- mean((predictions - donnees_test$Weight)^2)
-# print(mse)
+# Evaluate the model on the testing dataset
+predictions <- predict(model_poly, newdata = test_set)
+test_mse <- mean((test_set$Weight - predictions)^2)
+print(test_mse)
+```
 
+```{r}
+#36 * 7, 39, 70, 152, 1, 2
+# Hypothetical values for prediction
+new_data <- data.frame(
+        Maternal_age = 39,
+        Maternal_weight = 70,
+        Maternal_height = 152,
+        Parity = 2,
+        Sex = factor("Male", levels = c("Male", "Female")),  # ensure factor level consistency
+        Gestational_age = 36*7
+)
 
+# Predict using the linear model
+predicted_weight_linear <- predict(model_linear, newdata = new_data)
+print(predicted_weight_linear)
+
+# Predict using the polynomial model
+predicted_weight_poly <- predict(model_poly, newdata = new_data)
+print(predicted_weight_poly)
 ```
 ```{r}
+# Assume df contains gestational ages ranging from minimum to maximum observed
+ages_for_prediction <- data.frame(Gestational_age = seq(min(df$Gestational_age), max(df$Gestational_age), by = 0.5))
+
+# Fill in constant values for other predictors based on hypothetical average or median values
+ages_for_prediction$Maternal_age <- median(df$Maternal_age)
+ages_for_prediction$Maternal_weight <- median(df$Maternal_weight)
+ages_for_prediction$Maternal_height <- median(df$Maternal_height)
+ages_for_prediction$Parity <- median(df$Parity)
+ages_for_prediction$Sex <- factor("Female", levels = unique(df$Sex))  # Adjust as necessary
+
+# Predict weights using both models
+ages_for_prediction$Weight_Linear <- predict(model_linear, newdata = ages_for_prediction)
+ages_for_prediction$Weight_Poly <- predict(model_poly, newdata = ages_for_prediction)
+
+# Plotting
+library(ggplot2)
+ggplot(ages_for_prediction, aes(x = Gestational_age)) +
+        geom_line(aes(y = Weight_Linear, colour = "Linear")) +
+        geom_line(aes(y = Weight_Poly, colour = "Polynomial")) +
+        labs(y = "Predicted Weight", x = "Gestational Age", title = "Predicted Baby Weight by Gestational Age") +
+        scale_colour_manual(name = "Model Type", values = c("Linear" = "blue", "Polynomial" = "red"))
 
 
 ```
-```{r}
-
-```
-
-```{r}	```
-```{r}	```
-
 
