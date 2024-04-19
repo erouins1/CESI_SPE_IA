@@ -13,10 +13,11 @@ library(purrr)
 ```{r}
 
 all_files <- lapply(list.files(path = "RawData", pattern = "*.csv", full.names = TRUE), read.csv)
-dta <- do.call(path = "RawData", pattern = "*.csv", all_files)
+dta <- do.call("rbind", all_files)
 
-csv_data <- dta %>%
-    map_dfr(all_files)
+all_files <- list.files(path = "RawData", pattern = "*.csv", full.names = TRUE)
+dta <- do.call("rbind", lapply(all_files, read.csv))
+csv_data <- map_dfr(all_files, ~read_csv(.x))
 ```
 
 ```{r}
