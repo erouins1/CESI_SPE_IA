@@ -4,6 +4,7 @@ title: "pas mal"
 output: "html_document"
 date: "2024-09-04"
 ---
+
 ```{r}
 library(dplyr)
 library(readr)
@@ -12,31 +13,18 @@ library(purrr)
 ```
 ```{r}
 
-all_files <- lapply(list.files(path = "RawData", pattern = "*.csv", full.names = TRUE), read.csv)
-dta <- do.call("rbind", all_files)
+# List all cv files in the directory Data
+csv_files <- fs::dir_ls("/Users/benoitdesbourdieux/Documents/CESI/Data_science/CESI_SPE_IA/RawData", regexp = "\\.csv$") # nolint: line_length_linter.
 
-all_files <- list.files(path = "RawData", pattern = "*.csv", full.names = TRUE)
-dta <- do.call("rbind", lapply(all_files, read.csv))
-csv_data <- map_dfr(all_files, ~read_csv(.x))
-```
-
-```{r}
-
-# Sauvegarder le RawData frame combiné dans un nouveau fichier CSV
-write.csv(dta, "TreatedData/donnees_combinees.csv", row.names = FALSE)
-
-
-```
-```{r}
-# Lire le nouveau fichier CSV
-donnees_lues <- read.csv("TreatedData/donnees_combinees.csv")
+# Read all cv files
+csv_data <- csv_files %>%
+  map_dfr(read_csv)
 
 # Afficher les premières lignes du nouveau RawData frame pour vérification
-head(donnees_lues)
+head(csv_data)
 ```
-
 ```{r}
-data_d <- distinct(donnees_lues)
+data_d <- distinct(csv_data)
 write.csv(data_d, "TreatedData/data.csv", row.names = FALSE)
 ```
 
@@ -45,29 +33,16 @@ write.csv(data_d, "TreatedData/data.csv", row.names = FALSE)
 df <- data_d
 summary(df)
 ```
----
-On peut voir ici que certaines colonnes qui doivent être numériques sont de type caractère. Nous allons les convertir en numérique.
----
-```{r}
-df$Maternal_weight <- as.numeric(df$Maternal_weight)
-head(df$Maternal_weight, 10)
-```
-```{r}
-df$Maternal_height <- as.numeric(df$Maternal_height)
-head(df$Maternal_height, 10)
-```
-```{r}
-df$Parity <- as.numeric(df$Parity)
-freq_parity <- table(df$Parity)
-print(freq_parity)
-```
 
 ---
+Nous avons 6 colonnes dans notre jeu de données, dont 5 sont numériques et 1 est catégorielle.
+
 Il existe 10 valeurs différentes dans la colonne Parity, et les répartitions sont très inégales.
 Il faudra garder cela en tête lors de l'analyse des résultats du modèle.
 
 Dans un cadre éthique, nous vérifions la répartition de chaque sexe dans notre jeu de données.
 ---
+
 ```{r}
 freq_sex <- table(df$Sex)
 print(freq_sex)
@@ -78,19 +53,24 @@ Il y a une répartition égale entre les enfants de sexe masculin et féminin, c
 
 On supprime la colonne X qui est inutile
 ---
+
 ```{r}
 df <- subset(df, select = -X)
 ```
+
 ---
 On détermine le nombre de valeurs manquantes dans chaque colonne
 ---
+
 ```{r}
 na_counts <- colSums(is.na(df))
 print(na_counts)
 ```
+
 ---
 Il n'y a aucune valeur manquante, on peut donc poursuivre l'analyse des données.
 ---
+
 ```{r}
 boxplot(df$Maternal_age, main = "Maternal age", ylab = "Y-axis Label")
 boxplot(df$Maternal_weight, main = "Maternal weight", ylab = "Y-axis Label")
@@ -144,4 +124,5 @@ Nous allons normaliser et standardiser les variables numériques pour les mettre
 
 ```{r}	```
 ```{r}	```
+
 
