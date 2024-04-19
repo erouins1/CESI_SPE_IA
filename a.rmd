@@ -9,23 +9,39 @@ date: "2024-09-04"
 library(dplyr)
 library(readr)
 library(purrr)
+knitr::opts_chunk$set(cache = FALSE, autodep = TRUE)
 
 ```
 ```{r}
-
 # List all cv files in the directory Data
 csv_files <- fs::dir_ls("./RawData", regexp = "\\.csv$") # nolint: line_length_linter.
 
+# Check if files are detected
+if (length(csv_files) == 0) {
+  message("No CSV files found in the directory.")
+}
+
+
 # Read all cv files
 csv_data <- csv_files %>%
-  map_dfr(read_csv)
+        map_dfr(~ read_csv(.x, col_types = cols()))
+
+if (nrow(csv_data) == 0) {
+  print("CSV files are read but no data is present.")
+}
 
 # Afficher les premières lignes du nouveau RawData frame pour vérification
 head(csv_data)
 ```
 ```{r}
 data_d <- distinct(csv_data)
-write.csv(data_d, "TreatedData/data.csv", row.names = FALSE)
+# Afficher les premières lignes du nouveau RawData frame pour vérification  
+head(data_d)
+# vérifie que le fichier data.csv existe déjà
+if (!file.exists("TreatedData/data.csv")) {
+  write.csv(data_d, "TreatedData/data.csv", row.names = FALSE)
+}
+
 ```
 
 ## Première analyse des données
@@ -144,6 +160,22 @@ df_s <- scale(df_e, center = TRUE, scale = TRUE)
 summary(df_s)
 ```
 ```{r}
+
+# Assuming df_s was created by scaling
+df_s <- as.data.frame(scale(df_e, center = TRUE, scale = TRUE))
+
+# Ajuster un modèle de régression polynomiale avec des termes polynomiaux pour plusieurs variables
+modele_poly <- lm(Weight ~ poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
+        poly(Maternal_height, 2) + poly(Parity, 2) +
+        poly(Sex_Male, 1) + poly(Sex_Female, 1) + poly(Gestational_age, 2), data = df_s)
+
+# Afficher le résumé du modèle
+summary(modele_poly)
+
+# Prédiction et évaluation avec des données de test (si disponibles)
+# predictions <- predict(modele_poly, newdata = donnees_test)
+# mse <- mean((predictions - donnees_test$Weight)^2)
+# print(mse)
 
 
 ```
