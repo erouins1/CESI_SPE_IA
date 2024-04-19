@@ -68,11 +68,29 @@ On détermine le nombre de valeurs manquantes dans chaque colonne
 na_counts <- colSums(is.na(df))
 print(na_counts)
 ```
-
 ---
-Il n'y a aucune valeur manquante, on peut donc poursuivre l'analyse des données.
+Au vu du faible nombre de valeurs manquantes par rapport à la taille du jeu de données, nous pouvons les supprimer sans problème. Nous vérifions ensuite qu'elles sont correctement supprimées.
 ---
-
+```{r}
+df <- na.omit(df)
+na_counts <- colSums(is.na(df))
+print(na_counts)
+```
+---
+Vérifions s'il y a des colonnes contenant des valeurs nulles illogiques.
+---
+```{r}
+zero_counts <- colSums(df == 0)
+print(zero_counts)
+```
+---
+Parity est booléen, c'est donc normal d'avoir des valeurs nulles. En revanche, Maternal_weight ne devrait pas avoir de valeur nulle. Nous allons donc supprimer les lignes contenant des valeurs nulles dans cette colonne.
+---
+```{r}
+df <- df %>% filter(Maternal_weight != 0)
+zero_counts <- colSums(df == 0)
+print(zero_counts)
+```
 ```{r}
 boxplot(df$Maternal_age, main = "Maternal age", ylab = "Y-axis Label")
 boxplot(df$Maternal_weight, main = "Maternal weight", ylab = "Y-axis Label")
