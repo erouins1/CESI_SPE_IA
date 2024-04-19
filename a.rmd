@@ -12,8 +12,8 @@ library(purrr)
 ```
 ```{r}
 
-all_files <- lapply(list.files(path = "./data", pattern = "*.csv", full.names = TRUE), read.csv)
-dta <- do.call(path = "./data", pattern = "*.csv", all_files)
+all_files <- lapply(list.files(path = "RawData", pattern = "*.csv", full.names = TRUE), read.csv)
+dta <- do.call(path = "RawData", pattern = "*.csv", all_files)
 
 csv_data <- dta %>%
     map_dfr(all_files)
@@ -21,22 +21,22 @@ csv_data <- dta %>%
 
 ```{r}
 
-# Sauvegarder le data frame combiné dans un nouveau fichier CSV
-write.csv(dta, "donnees_combinees.csv", row.names = FALSE)
+# Sauvegarder le RawData frame combiné dans un nouveau fichier CSV
+write.csv(dta, "TreatedData/donnees_combinees.csv", row.names = FALSE)
 
 
 ```
 ```{r}
 # Lire le nouveau fichier CSV
-donnees_lues <- read.csv("donnees_combinees.csv")
+donnees_lues <- read.csv("TreatedData/donnees_combinees.csv")
 
-# Afficher les premières lignes du nouveau data frame pour vérification
+# Afficher les premières lignes du nouveau RawData frame pour vérification
 head(donnees_lues)
 ```
 
 ```{r}
 data_d <- distinct(donnees_lues)
-write.csv(data_d, "data.csv", row.names = FALSE)
+write.csv(data_d, "TreatedData/data.csv", row.names = FALSE)
 ```
 
 ## Première analyse des données
