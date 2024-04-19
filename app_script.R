@@ -5,53 +5,43 @@ library(shinydashboard)
 
 # Define UI for application that draws a histogram
 ui <- dashboardPage(
-  dashboardHeader(title = "Basic dashboard"),
+  dashboardHeader(title = "Foetal Weight Prediction"),
   dashboardSidebar(
-    # Sidebar content
-    sidebarMenu(
-      menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
-      menuItem("Widgets", tabName = "widgets", icon = icon("th"))
+    tags$head(
+      tags$style(HTML("
+        /* CSS to center the title of all boxes in the sidebar */
+        .sidebar .box-header .box-title {
+          text-align: center;
+          display: block;
+        }
+
+        .form-group > label {
+          color: black;  /* Force label color to black */
+          visibility: visible;  /* Force labels to be visible */
+          display: block;  /* Ensure labels are not set to display:none */
+          text-align: center;  /* Center the labels */
+        }
+      "))
     ),
-    sliderInput("MaternalAgeSlider", "Maternal Age", min = 14, max = 60, value = 30),
-    sliderInput("MaternalWeightSlider", "Maternal Weight", min = 40, max = 150, value = 70),
-    sliderInput("MaternalHeightSlider", "Maternal Height", min = 120, max = 230, value = 170),
-    selectInput("MaternalParity", "Maternal Parity", choices = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)),
-    selectInput("ChildGender",  "Child Gender", choices = c("Male", "Female")),
-    sliderInput("GestationalAgeSlider", "Gestational Age", min = 120, max = 320, value = 220),
+    box(
+      width = "100%",
+      title = "Input Parameters",
+      sliderInput("MaternalAgeSlider", "Maternal Age (years)", min = 14, max = 60, value = 37),
+      sliderInput("MaternalWeightSlider", "Maternal Weight (kg)", min = 40, max = 150, value = 95),
+      sliderInput("MaternalHeightSlider", "Maternal Height (cm)", min = 120, max = 230, value = 175),
+      selectInput("MaternalParity", "Maternal Parity", choices = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)),
+      selectInput("ChildGender",  "Child Gender", choices = c("Male", "Female")),
+      sliderInput("GestationalAgeSlider", "Gestational Age (days)", min = 120, max = 320, value = 220),
+    )
   ),
   dashboardBody(
-    fluidRow(
-      box(plotOutput("plot1", height = 250)),
-      box(
-        title = "Controls",
-        sliderInput("bins",
-                    "Number of bins:",
-                    min = 1,
-                    max = 50,
-                    value = 30)
-      )
-    )
+
   )
 )
 
-# Define the prediction model and the data outputed
-model <- function(input) {
-  # Define the model
-  model <- lm(mpg ~ wt, data = mtcars)
-
-  # Predict the value
-  prediction <- predict(model, newdata = data.frame(wt = input))
-
-  return(prediction)
-}
-
 # Define server logic required to draw a histogram
-server <- function(input, output) {
-  output$plot1 <- renderPlot({
-    x    <- faithful$waiting
-    bins <- seq(min(x), max(x), length.out = input$bins + 1)
-    hist(x, breaks = bins, col = "#75AADB", border = "white")
-  })
+server <- function(input, output, session) {
+
 }
 
 # Run the application
