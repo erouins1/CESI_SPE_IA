@@ -222,48 +222,77 @@ saveRDS(model_poly, "Models/polynomial_model.rds")
 ```
 
 ```{r}
-#36 * 7, 39, 70, 152, 1, 2
-# Hypothetical values for prediction
-new_data <- data.frame(
-        Maternal_age = 39,
-        Maternal_weight = 70,
-        Maternal_height = 152,
-        Parity = 2,
-        Sex = factor("Male", levels = c("Male", "Female")),  # ensure factor level consistency
-        Gestational_age = 36*7
+library(ggplot2)
+library(dplyr)
+
+# Create a grid of data to simulate a wider variety of input scenarios
+simulated_data <- expand.grid(
+        Gestational_age = seq(min(df$Gestational_age), max(df$Gestational_age), by = 0.5),
+        Maternal_age = quantile(df$Maternal_age, c(0.25, 0.5, 0.75)),
+        Maternal_weight = quantile(df$Maternal_weight, c(0.25, 0.5, 0.75)),
+        Maternal_height = quantile(df$Maternal_height, c(0.25, 0.5, 0.75)),
+        Parity = unique(df$Parity),
+        Sex = factor(levels(df$Sex))
 )
 
-# Predict using the linear model
-predicted_weight_linear <- predict(model_linear, newdata = new_data)
-print(predicted_weight_linear)
+# Predict weights for the entire grid for both models
+simulated_data$Weight_Linear <- predict(model_linear, newdata = simulated_data)
+simulated_data$Weight_Poly <- predict(model_poly, newdata = simulated_data)
 
-# Predict using the polynomial model
-predicted_weight_poly <- predict(model_poly, newdata = new_data)
-print(predicted_weight_poly)
+# Function to calculate and plot percentiles
+plot_percentiles <- function(data, weight_col, title, color) {
+  data %>%
+          group_by(Gestational_age) %>%
+          summarise(
+                  Weight = mean(!!sym(weight_col), na.rm = TRUE),
+                  Percentile3 = quantile(!!sym(weight_col), 0.03, na.rm = TRUE),
+                  Percentile10 = quantile(!!sym(weight_col), 0.1, na.rm = TRUE),
+                  Percentile90 = quantile(!!sym(weight_col), 0.9, na.rm = TRUE),
+                  Percentile97 = quantile(!!sym(weight_col), 0.97, na.rm = TRUE),
+                  Percentile99 = quantile(!!sym(weight_col), 0.99, na.rm = TRUE)
+          ) %>%
+          ggplot(aes(x = Gestational_age)) +
+          geom_line(aes(y = Weight), color = color, size = 1.2) +
+          geom_line(aes(y = Percentile3), color = "blue", linetype = "dashed") +
+          geom_line(aes(y = Percentile10), color = "green", linetype = "dashed") +
+          geom_line(aes(y = Percentile90), color = "orange", linetype = "dashed") +
+          geom_line(aes(y = Percentile97), color = "red", linetype = "dashed") +
+          geom_line(aes(y = Percentile99), color = "purple", linetype = "dashed") +
+          labs(title = title, y = "Predicted Weight", x = "Gestational Age")
+}
+
+# Plot percentiles for both models
+p_linear <- plot_percentiles(simulated_data, "Weight_Linear", "Linear Model: Growth Percentiles", "black")
+p_poly <- plot_percentiles(simulated_data, "Weight_Poly", "Polynomial Model: Growth Percentiles", "black")
+
 ```
+
 ```{r}
-# Assume df contains gestational ages ranging from minimum to maximum observed
-ages_for_prediction <- data.frame(Gestational_age = seq(min(df$Gestational_age), max(df$Gestational_age), by = 0.5))
+# Predict weights for the entire grid for both models
+simulated_data$Weight_Linear <- predict(model_linear, newdata = simulated_data)
+simulated_data$Weight_Poly <- predict(model_poly, newdata = simulated_data)
 
-# Fill in constant values for other predictors based on hypothetical average or median values
-ages_for_prediction$Maternal_age <- median(df$Maternal_age)
-ages_for_prediction$Maternal_weight <- median(df$Maternal_weight)
-ages_for_prediction$Maternal_height <- median(df$Maternal_height)
-ages_for_prediction$Parity <- median(df$Parity)
-ages_for_prediction$Sex <- factor("Female", levels = unique(df$Sex))  # Adjust as necessary
+# Calculate average weights for each gestational age for both models
+comparison_data <- simulated_data %>%
+        group_by(Gestational_age) %>%
+        summarise(
+                Average_Weight_Linear = mean(Weight_Linear, na.rm = TRUE),
+                Average_Weight_Poly = mean(Weight_Poly, na.rm = TRUE)
+        )
 
-# Predict weights using both models
-ages_for_prediction$Weight_Linear <- predict(model_linear, newdata = ages_for_prediction)
-ages_for_prediction$Weight_Poly <- predict(model_poly, newdata = ages_for_prediction)
-
-# Plotting
-library(ggplot2)
-ggplot(ages_for_prediction, aes(x = Gestational_age)) +
-        geom_line(aes(y = Weight_Linear, colour = "Linear")) +
-        geom_line(aes(y = Weight_Poly, colour = "Polynomial")) +
-        labs(y = "Predicted Weight", x = "Gestational Age", title = "Predicted Baby Weight by Gestational Age") +
-        scale_colour_manual(name = "Model Type", values = c("Linear" = "blue", "Polynomial" = "red"))
+# Plot graph with curves from both models
+p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
+        geom_line(aes(y = Average_Weight_Linear, colour = "Linear Model"), size = 1.2) +
+        geom_line(aes(y = Average_Weight_Poly, colour = "Polynomial Model"), size = 1.2) +
+        scale_colour_manual(values = c("Linear Model" = "blue", "Polynomial Model" = "red")) +
+        labs(title = "Comparison of Linear and Polynomial Model Predictions",
+             y = "Average Predicted Weight", x = "Gestational Age",
+             colour = "Model Type")
 
 
+# Print plots
+print(p_linear)
+print(p_poly)
+print(p_comparison)
 ```
 
