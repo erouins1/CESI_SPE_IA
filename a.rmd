@@ -200,6 +200,9 @@ summary(model_linear)
 predictions <- predict(model_linear, newdata = test_set)
 test_mse <- mean((test_set$Weight - predictions)^2)
 print(test_mse)
+
+# Export the model to a file
+saveRDS(model_linear, "Models/linear_model.rds")
 ```
 
 ```{r}
@@ -213,6 +216,9 @@ summary(model_poly)
 predictions <- predict(model_poly, newdata = test_set)
 test_mse <- mean((test_set$Weight - predictions)^2)
 print(test_mse)
+
+# Export the model to a file
+saveRDS(model_poly, "Models/polynomial_model.rds")
 ```
 
 ```{r}
