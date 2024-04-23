@@ -1,24 +1,49 @@
 library(shiny)
 library(shinydashboard)
-library(plotly)  # Load plotly for interactive plots
+library(plotly)
+library(dplyr)
+library(readr)
 
-predictFoetalWeight <- function(modelName, Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_age) {
+# Function to pull the data from the TreatedData/test_set.csv file into a global variable
+load_data <- function() {
+  data <- read_csv("TreatedData/test_set.csv")
+  return(data)
+}
+
+predict_foetal_weight <- function(modelName, Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_ages) {
   model <- readRDS(modelName)
 
-  prediction <- numeric(Gestational_age)
-  for (i in 1:Gestational_age) {
+  predictions <- vector("numeric", length(Gestational_ages))  # Pre-allocate the vector
+  for (i in seq_along(Gestational_ages)) {
     data <- data.frame(
-      Maternal_age = as.numeric(Maternal_age),
-      Maternal_weight = as.numeric(Maternal_weight),
-      Maternal_height = as.numeric(Maternal_height),
-      Parity = as.numeric(Parity),
-      Sex = as.factor(Sex),
-      Gestational_age = i
+      Maternal_age = as.numeric(Maternal_age[i]),
+      Maternal_weight = as.numeric(Maternal_weight[i]),
+      Maternal_height = as.numeric(Maternal_height[i]),
+      Parity = as.numeric(Parity[i]),
+      Sex = as.factor(Sex[i]),
+      Gestational_age = Gestational_ages[i]
     )
-    prediction[i] <- predict(model, newdata = data)
+    predictions[i] <- predict(model, newdata = data)
   }
-  return(prediction)
+  return(predictions)
 }
+
+# Calculates percentiles of weight per Gestational_age brackets for the data frame
+calculate_percentiles <- function(data) {
+  percentiles <- data %>%
+    mutate(Week = floor(Gestational_age / 7)) %>%  # Convert days to weeks
+    group_by(Week) %>%
+    summarise(
+      P1 = quantile(Weight, 0.01, na.rm = TRUE),
+      P3 = quantile(Weight, 0.03, na.rm = TRUE),
+      P10 = quantile(Weight, 0.10, na.rm = TRUE),
+      P90 = quantile(Weight, 0.90, na.rm = TRUE),
+      P97 = quantile(Weight, 0.97, na.rm = TRUE),
+      P99 = quantile(Weight, 0.99, na.rm = TRUE)
+    )
+  return(percentiles)
+}
+
 
 ui <- dashboardPage(
   dashboardHeader(title = "Foetal Weight Prediction"),
@@ -44,7 +69,7 @@ ui <- dashboardPage(
       sliderInput("MaternalWeightSlider", "Maternal Weight (kg)", min = 40, max = 150, value = 70),
       sliderInput("MaternalHeightSlider", "Maternal Height (cm)", min = 120, max = 230, value = 165),
       selectInput("MaternalParity", "Maternal Parity", choices = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)),
-      selectInput("ChildGender",  "Child Gender", choices = c("Male", "Female")),
+      selectInput("ChildGender", "Child Gender", choices = c("Male", "Female")),
       sliderInput("GestationalAgeSlider", "Gestational Age (days)", min = 120, max = 320, value = 270),
     )
   ),
@@ -56,31 +81,60 @@ ui <- dashboardPage(
 )
 
 server <- function(input, output, session) {
-  output$plot <- renderPlotly({
-    Maternal_age <- input$MaternalAgeSlider
-    Maternal_weight <- input$MaternalWeightSlider
-    Maternal_height <- input$MaternalHeightSlider
-    Parity <- input$MaternalParity
-    Sex <- input$ChildGender
-    Gestational_age <- input$GestationalAgeSlider
-
-    prediction <- predictFoetalWeight("./Models/polynomial_model.rds", Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_age)
-
-    gest_ages <- 1:Gestational_age
-    valid_indices <- prediction > 0
-    filtered_predictions <- prediction[valid_indices]
-    filtered_ages <- gest_ages[valid_indices]
-
-    if (length(filtered_predictions) == 0) {
-      return(NULL)
-    }
-
-    plot_ly(data = data.frame(Gestational_Age = filtered_ages, Foetal_Weight = filtered_predictions), x = ~Gestational_Age, y = ~Foetal_Weight, type = 'scatter', mode = 'lines+markers',
-            text = ~paste("Gestational Age:", Gestational_Age, "days<br>Weight:", Foetal_Weight, "grams"), hoverinfo = "text") %>%
-      layout(title = "Foetal Weight Prediction by Gestational Age",
-             xaxis = list(title = "Gestational Age (days)"),
-             yaxis = list(title = "Foetal Weight (grams)"))
+  data <- reactive({
+    read_csv("TreatedData/test_set.csv")
   })
+
+  predicted_point <- reactive({
+    predicted_weight <- predict_foetal_weight("./Models/polynomial_model.rds",
+                                              input$MaternalAgeSlider,
+                                              input$MaternalWeightSlider,
+                                              input$MaternalHeightSlider,
+                                              input$MaternalParity,
+                                              input$ChildGender,
+                                              input$GestationalAgeSlider)
+    data.frame(Gestational_age = floor(input$GestationalAgeSlider / 7),  # Convert to weeks here for consistency
+               Foetal_Weight = predicted_weight)
+  })
+
+  percentiles <- reactive({
+    calculate_percentiles(data())
+  })
+
+  # Observe percentiles
+  observe({
+    print(colnames(percentiles()))  # Debugging line to check column names
+    print(head(percentiles()))      # Print first few rows to check data
+  })
+
+  output$plot <- renderPlotly({
+    df <- data()
+    predicted_df <- predicted_point()
+    percentile_df <- percentiles()  # Get the percentile data
+
+    plot <- plot_ly() %>%
+      add_trace(data = df, x = ~floor(Gestational_age / 7), y = ~Weight,
+                type = 'scatter', mode = 'markers', name = 'Actual Data',
+                marker = list(color = 'blue')) %>%
+      add_trace(data = predicted_df, x = ~Gestational_age, y = ~Foetal_Weight,
+                type = 'scatter', mode = 'markers', name = 'Predicted Weight',
+                marker = list(color = 'red', size = 10))
+
+    # Add lines for each percentile
+    plot <- plot %>%
+      add_lines(data = percentile_df, x = ~Week, y = ~P1, name = '1st Percentile', line = list(color = 'orange', dash = 'dot')) %>%
+      add_lines(data = percentile_df, x = ~Week, y = ~P3, name = '3rd Percentile', line = list(color = 'yellow', dash = 'dot')) %>%
+      add_lines(data = percentile_df, x = ~Week, y = ~P10, name = '10th Percentile', line = list(color = 'green', dash = 'dot')) %>%
+      add_lines(data = percentile_df, x = ~Week, y = ~P90, name = '90th Percentile', line = list(color = 'purple', dash = 'dot')) %>%
+      add_lines(data = percentile_df, x = ~Week, y = ~P97, name = '97th Percentile', line = list(color = 'brown', dash = 'dot')) %>%
+      add_lines(data = percentile_df, x = ~Week, y = ~P99, name = '99th Percentile', line = list(color = 'black', dash = 'dot'))
+
+    plot <- plot %>% layout(title = "Foetal Weight by Gestational Week",
+                            xaxis = list(title = "Gestational Week"),
+                            yaxis = list(title = "Foetal Weight (g)"))
+    return(plot)
+  })
+
 }
 
 shinyApp(ui = ui, server = server)
