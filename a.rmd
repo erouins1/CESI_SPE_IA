@@ -192,9 +192,25 @@ head(df)
 
 ```
 ```{r}
+# Cross-validation setup
+
+train_control <- trainControl(
+  method = "cv",
+  number = 5
+)
+```
+```{r}
 # Fit the linear model on the training dataset
-model_linear <- lm(Weight ~ Maternal_age + Maternal_weight +
-        Maternal_height + Parity + Sex + Gestational_age, data = train_set)
+# model_linear <- lm(Weight ~ Maternal_age + Maternal_weight +
+#         Maternal_height + Parity + Sex + Gestational_age, data = train_set)
+
+# Fit the model using cross-validation
+model_linear <- train(
+  Weight ~ Maternal_age + Maternal_weight + Maternal_height + Parity + Sex + Gestational_age,
+  data = train_set,
+  method = "lm",
+  trControl = train_control
+)
 
 # Summary of the model
 summary(model_linear)
@@ -209,8 +225,12 @@ saveRDS(model_linear, "Models/linear_model.rds")
 ```
 ```{r}
 # Modèle polynomial de croissance
-model_p_c <- lm(log(Weight) ~ poly(Gestational_age, 2) + Maternal_age + Maternal_weight + Maternal_height + Parity + Sex, data=train_set)
-
+model_p_c <- train(
+  log(Weight) ~ poly(Gestational_age, 2) + Maternal_age + Maternal_weight + Maternal_height + Parity + Sex,
+  data = train_set,
+  method = "lm",
+  trControl = train_control
+)
 # Résumé du modèle
 summary(model_p_c)
 
@@ -218,7 +238,9 @@ summary(model_p_c)
 ks.test(residuals(model_p_c), "pnorm", mean(residuals(model_p_c)), sd(residuals(model_p_c)))
 
 # Calcul des intervalles de confiance
-confint(model_p_c)
+final_model <- model_p_c$finalModel
+model_confidence_intervals <- confint(final_model)
+print(model_confidence_intervals)
 
 
 predictions <- exp(predict(model_p_c, newdata = test_set))
@@ -230,9 +252,15 @@ saveRDS(model_p_c, "Models/p_c_model.rds")
 ```
 
 ```{r}
-model_poly <- lm(Weight ~ poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
-        poly(Maternal_height, 2) + poly(Parity, 2) +
-        poly(Sex, 1) + poly(Gestational_age, 2), data = train_set)
+model_poly <- train(
+  Weight ~ poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
+    poly(Maternal_height, 2) + poly(Parity, 2) +
+    poly(Sex, 1) + poly(Gestational_age, 2),
+  data = train_set,
+  method = "lm",
+  trControl = train_control
+)
+
 
 summary(model_poly)
 
@@ -248,17 +276,38 @@ saveRDS(model_poly, "Models/polynomial_model.rds")
 # Mixed linear model
 library(lme4)
 
-# Fit the mixed linear model on the training dataset
-model_mixed <- lmer(Weight ~ Maternal_age + Maternal_weight + Maternal_height +
-  Parity + Sex + Gestational_age + (1 | Group), data = train_set)
+# Cross-validation setup
+set.seed(123)
+n_folds <- 5
+folds <- sample(rep(1:n_folds, length.out = nrow(train_set)))
 
-# Summary of the mixed model
-summary(model_mixed)
+mse_results <- numeric(n_folds)
 
-# Evaluate the model on the testing dataset
-predictions_mixed <- predict(model_mixed, newdata = test_set)
-test_mse_mixed <- mean((test_set$Weight - predictions_mixed)^2)
-print(test_mse_mixed)
+for (i in 1:n_folds) {
+  test_indices <- which(folds == i)
+  train_indices <- setdiff(1:nrow(train_set), test_indices)
+
+  # Subset the data
+  training_data <- train_set[train_indices, ]
+  testing_data <- train_set[test_indices, ]
+
+  # Fit the model on training data
+  model_mixed <- lmer(Weight ~ Maternal_age + Maternal_weight + Maternal_height +
+    Parity + Sex + Gestational_age + (1 | Group), data = training_data)
+
+  # Predict and calculate MSE on the testing fold
+  predictions <- predict(model_mixed, newdata = testing_data, re.form = NA)  # NA to ignore random effects
+  mse_results[i] <- mean((testing_data$Weight - predictions)^2)
+}
+
+# Calculate the average MSE over all folds
+average_mse <- mean(mse_results)
+print(average_mse)
+
+predictions_final <- predict(model_mixed, newdata = test_set)
+final_test_mse <- mean((test_set$Weight - predictions_final)^2)
+print(final_test_mse)
+
 
 # Export the mixed model to a file
 saveRDS(model_mixed, "Models/mixed_linear_model.rds")
