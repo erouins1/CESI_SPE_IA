@@ -67,14 +67,16 @@ print(freq_sex)
 ---
 Il y a une répartition égale entre les enfants de sexe masculin et féminin, ce qui est un bon signe pour l'analyse des données.
 
-On supprime la colonne X qui est inutile
+On crée une colonne groupe selon l'ID pour séparer les 2 types d'expérience différentes.
+Nous n'avons ensuite plus besoin de l'ID (noté "...1").
 ---
 
 ```{r}
+df$Group <- ifelse(df$...1 <= 6000, 1, 2)
+
 if ("...1" %in% names(df)) {
   df <- subset(df, select = -1)
 }
-
 head(df)
 ```
 
@@ -147,6 +149,7 @@ library(mltools)
 library(data.table)
 
 df$Sex <- as.factor(df$Sex)
+df$Group <- as.factor(df$Group)
  #df_e <- one_hot(as.data.table(df))
 #head(df_e)
 
@@ -241,6 +244,25 @@ print(test_mse)
 # Export the model to a file
 saveRDS(model_poly, "Models/polynomial_model.rds")
 ```
+```{r}
+# Mixed linear model
+library(lme4)
+
+# Fit the mixed linear model on the training dataset
+model_mixed <- lmer(Weight ~ Maternal_age + Maternal_weight + Maternal_height +
+  Parity + Sex + Gestational_age + (1 | Group), data = train_set)
+
+# Summary of the mixed model
+summary(model_mixed)
+
+# Evaluate the model on the testing dataset
+predictions_mixed <- predict(model_mixed, newdata = test_set)
+test_mse_mixed <- mean((test_set$Weight - predictions_mixed)^2)
+print(test_mse_mixed)
+
+# Export the mixed model to a file
+saveRDS(model_mixed, "Models/mixed_linear_model.rds")
+```
 
 ```{r}
 library(ggplot2)
@@ -253,13 +275,20 @@ simulated_data <- expand.grid(
         Maternal_weight = quantile(df$Maternal_weight, c(0.25, 0.5, 0.75)),
         Maternal_height = quantile(df$Maternal_height, c(0.25, 0.5, 0.75)),
         Parity = unique(df$Parity),
-        Sex = factor(levels(df$Sex))
+        Sex = factor(levels(df$Sex)),
+        Group = factor(levels(df$Group))
 )
 
+
+print(levels(train_set$Group))
+print(levels(simulated_data$Group))
+
 # Predict weights for the entire grid for both models
+# Predict weights for the entire grid for all models
 simulated_data$Weight_Linear <- predict(model_linear, newdata = simulated_data)
 simulated_data$Weight_Poly <- predict(model_poly, newdata = simulated_data)
 simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
+simulated_data$Weight_Mixed <- predict(model_mixed, newdata = simulated_data)
 
 
 # Function to calculate and plot percentiles
@@ -288,6 +317,7 @@ plot_percentiles <- function(data, weight_col, title, color) {
 p_linear <- plot_percentiles(simulated_data, "Weight_Linear", "Linear Model: Growth Percentiles", "black")
 p_poly <- plot_percentiles(simulated_data, "Weight_Poly", "Polynomial Model: Growth Percentiles", "black")
 p_poly_c <- plot_percentiles(simulated_data, "Weight_Poly_C", "Polynomial Model: Growth Percentiles", "black")
+p_mixed <- plot_percentiles(simulated_data, "Weight_Mixed", "Mixed Linear Model: Growth Percentiles", "black")
 
 ```
 
@@ -296,6 +326,7 @@ p_poly_c <- plot_percentiles(simulated_data, "Weight_Poly_C", "Polynomial Model:
 simulated_data$Weight_Linear <- predict(model_linear, newdata = simulated_data)
 simulated_data$Weight_Poly <- predict(model_poly, newdata = simulated_data)
 simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
+simulated_data$Weight_Mixed <- predict(model_mixed, newdata = simulated_data)
 
 # Calculate average weights for each gestational age for both models
 comparison_data <- simulated_data %>%
@@ -303,7 +334,8 @@ comparison_data <- simulated_data %>%
         summarise(
                 Average_Weight_Linear = mean(Weight_Linear, na.rm = TRUE),
                 Average_Weight_Poly = mean(Weight_Poly, na.rm = TRUE),
-                Average_Weight_Poly_C = mean(Weight_Poly_C, na.rm = TRUE)
+                Average_Weight_Poly_C = mean(Weight_Poly_C, na.rm = TRUE),
+                Average_Weight_Mixed = mean(Weight_Mixed, na.rm = TRUE)
         )
 
 # Plot graph with curves from both models
@@ -311,8 +343,9 @@ p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
         geom_line(aes(y = Average_Weight_Linear, colour = "Linear Model"), size = 1.2) +
         geom_line(aes(y = Average_Weight_Poly, colour = "Polynomial Model"), size = 1.2) +
         geom_line(aes(y = Average_Weight_Poly_C, colour = "Polynomial C Model"), size = 1.2) +
-        scale_colour_manual(values = c("Linear Model" = "blue", "Polynomial Model" = "red", "Polynomial C Model" = "black")) +
-        labs(title = "Comparison of Linear and Polynomials Model Predictions",
+        geom_line(aes(y = Average_Weight_Mixed, colour = "Mixed Linear Model"), size = 1.2) +
+        scale_colour_manual(values = c("Linear Model" = "blue", "Polynomial Model" = "red", "Polynomial C Model" = "black", "Mixed Linear Model" = "green")) +
+        labs(title = "Comparison of Linear, Polynomials and Mixed Models Predictions",
              y = "Average Predicted Weight", x = "Gestational Age",
              colour = "Model Type")
 
@@ -321,6 +354,26 @@ p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
 print(p_linear)
 print(p_poly)
 print(p_poly_c)
+print(p_mixed)
 print(p_comparison)
+```
+```{r}
+# simulated_data$Weight_Mixed <- predict(model_mixed, newdata = simulated_data)
+# p_mixed <- plot_percentiles(simulated_data, "Weight_Mixed", "Mixed Linear Model: Growth Percentiles", "grey")
+#
+# comparison_data <- simulated_data %>%
+#   group_by(Gestational_age) %>%
+#   summarise(
+#     Average_Weight_Mixed = mean(Weight_Mixed, na.rm = TRUE)  # adding average for mixed model
+#   )
+#
+# # Plot graph with curves from all models
+# p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
+#   geom_line(aes(y = Average_Weight_Mixed, colour = "Mixed Linear Model"), size = 1.2) +
+#   scale_colour_manual(values = c("Linear Model" = "blue", "Polynomial Model" = "red", "Polynomial C Model" = "black", "Mixed Linear Model" = "grey")) +
+#   labs(title = "Comparison of Model Predictions", y = "Average Predicted Weight", x = "Gestational Age", colour = "Model Type")
+#
+# # Print plots
+# print(p_mixed)
 ```
 
