@@ -204,6 +204,27 @@ print(test_mse)
 # Export the model to a file
 saveRDS(model_linear, "Models/linear_model.rds")
 ```
+```{r}
+# Modèle polynomial de croissance
+model_p_c <- lm(log(Weight) ~ poly(Gestational_age, 2) + Maternal_age + Maternal_weight + Maternal_height + Parity + Sex, data=train_set)
+
+# Résumé du modèle
+summary(model_p_c)
+
+# Test de Kolmogorov-Smirnov avec la distribution normale
+ks.test(residuals(model_p_c), "pnorm", mean(residuals(model_p_c)), sd(residuals(model_p_c)))
+
+# Calcul des intervalles de confiance
+confint(model_p_c)
+
+
+predictions <- exp(predict(model_p_c, newdata = test_set))
+test_mse <- mean((test_set$Weight - predictions)^2)
+print(test_mse)
+
+# Export the model to a file
+saveRDS(model_p_c, "Models/p_c_model.rds")
+```
 
 ```{r}
 model_poly <- lm(Weight ~ poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
@@ -238,6 +259,8 @@ simulated_data <- expand.grid(
 # Predict weights for the entire grid for both models
 simulated_data$Weight_Linear <- predict(model_linear, newdata = simulated_data)
 simulated_data$Weight_Poly <- predict(model_poly, newdata = simulated_data)
+simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
+
 
 # Function to calculate and plot percentiles
 plot_percentiles <- function(data, weight_col, title, color) {
@@ -264,6 +287,7 @@ plot_percentiles <- function(data, weight_col, title, color) {
 # Plot percentiles for both models
 p_linear <- plot_percentiles(simulated_data, "Weight_Linear", "Linear Model: Growth Percentiles", "black")
 p_poly <- plot_percentiles(simulated_data, "Weight_Poly", "Polynomial Model: Growth Percentiles", "black")
+p_poly_c <- plot_percentiles(simulated_data, "Weight_Poly_C", "Polynomial Model: Growth Percentiles", "black")
 
 ```
 
@@ -271,21 +295,24 @@ p_poly <- plot_percentiles(simulated_data, "Weight_Poly", "Polynomial Model: Gro
 # Predict weights for the entire grid for both models
 simulated_data$Weight_Linear <- predict(model_linear, newdata = simulated_data)
 simulated_data$Weight_Poly <- predict(model_poly, newdata = simulated_data)
+simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
 
 # Calculate average weights for each gestational age for both models
 comparison_data <- simulated_data %>%
         group_by(Gestational_age) %>%
         summarise(
                 Average_Weight_Linear = mean(Weight_Linear, na.rm = TRUE),
-                Average_Weight_Poly = mean(Weight_Poly, na.rm = TRUE)
+                Average_Weight_Poly = mean(Weight_Poly, na.rm = TRUE),
+                Average_Weight_Poly_C = mean(Weight_Poly_C, na.rm = TRUE)
         )
 
 # Plot graph with curves from both models
 p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
         geom_line(aes(y = Average_Weight_Linear, colour = "Linear Model"), size = 1.2) +
         geom_line(aes(y = Average_Weight_Poly, colour = "Polynomial Model"), size = 1.2) +
-        scale_colour_manual(values = c("Linear Model" = "blue", "Polynomial Model" = "red")) +
-        labs(title = "Comparison of Linear and Polynomial Model Predictions",
+        geom_line(aes(y = Average_Weight_Poly_C, colour = "Polynomial C Model"), size = 1.2) +
+        scale_colour_manual(values = c("Linear Model" = "blue", "Polynomial Model" = "red", "Polynomial C Model" = "black")) +
+        labs(title = "Comparison of Linear and Polynomials Model Predictions",
              y = "Average Predicted Weight", x = "Gestational Age",
              colour = "Model Type")
 
@@ -293,6 +320,7 @@ p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
 # Print plots
 print(p_linear)
 print(p_poly)
+print(p_poly_c)
 print(p_comparison)
 ```
 
