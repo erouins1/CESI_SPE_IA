@@ -37,10 +37,7 @@ head(csv_data)
 data_d <- distinct(csv_data)
 # Afficher les premières lignes du nouveau RawData frame pour vérification  
 head(data_d)
-# vérifie que le fichier data.csv existe déjà
-if (!file.exists("TreatedData/data.csv")) {
-  write.csv(data_d, "TreatedData/data.csv", row.names = FALSE)
-}
+
 
 ```
 
@@ -166,6 +163,11 @@ La fonction scale centre et réduit les données (moyenne de 0 et écart-type de
 # Transformer Gestational_age de jours en semaines arrondies à l'entier supérieur
 df <- df %>%
   mutate(Gestational_age = ceiling(Gestational_age / 7))
+
+# vérifie que le fichier data.csv existe déjà
+if (!file.exists("TreatedData/data.csv")) {
+  write.csv(df, "TreatedData/data.csv", row.names = FALSE)
+}
 
 ```
 
@@ -381,6 +383,8 @@ simulated_data <- expand.grid(
         Sex = factor(levels(df$Sex)),
         Group = factor(levels(df$Group))
 )
+
+print(head(simulated_data))
 
 
 print(levels(train_set$Group))

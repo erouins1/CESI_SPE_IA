@@ -12,6 +12,12 @@ load_data <- function() {
   return(data)
 }
 
+load_full_data <- function() {
+  full_data <- read_csv("TreatedData/data.csv")
+
+  return(full_data)
+}
+
 predict_foetal_weight <- function(modelName, Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_ages) {
   model <- readRDS(modelName)
 
@@ -44,6 +50,35 @@ calculate_percentiles <- function(data) {
       .groups = 'keep'  # Ensures that the grouping variables are kept
     )
   return(percentiles)
+}
+
+library(dplyr)
+library(ggplot2)
+
+plot_percentiles <- function(data, title, color) {
+  # Ensure that data is a dataframe and Weight_Poly_C is present as a column
+  if("Weight_Poly_C" %in% names(data)) {
+    data %>%
+      group_by(Gestational_age) %>%
+      summarise(
+        Weight = mean(Weight_Poly_C, na.rm = TRUE),  # Calculate mean weight
+        Percentile3 = quantile(Weight_Poly_C, 0.03, na.rm = TRUE),  # 3rd percentile
+        Percentile10 = quantile(Weight_Poly_C, 0.1, na.rm = TRUE),  # 10th percentile
+        Percentile90 = quantile(Weight_Poly_C, 0.9, na.rm = TRUE),  # 90th percentile
+        Percentile97 = quantile(Weight_Poly_C, 0.97, na.rm = TRUE),  # 97th percentile
+        Percentile99 = quantile(Weight_Poly_C, 0.99, na.rm = TRUE)   # 99th percentile
+      ) %>%
+      ggplot(aes(x = Gestational_age)) +
+      geom_line(aes(y = Weight), color = color, size = 1.2) +
+      geom_line(aes(y = Percentile3), color = "blue", linetype = "dashed") +
+      geom_line(aes(y = Percentile10), color = "green", linetype = "dashed") +
+      geom_line(aes(y = Percentile90), color = "orange", linetype = "dashed") +
+      geom_line(aes(y = Percentile97), color = "red", linetype = "dashed") +
+      geom_line(aes(y = Percentile99), color = "purple", linetype = "dashed") +
+      labs(title = title, y = "Predicted Weight", x = "Gestational Age")
+  } else {
+    stop("Weight_Poly_C column not found in the provided data.")
+  }
 }
 
 smooth_percentiles <- function(percentiles){
@@ -91,7 +126,8 @@ ui <- dashboardPage(
     fluidRow(
       box(width = 12, plotlyOutput("plot")),
       box(width = 12, plotlyOutput("result_compare_plot")),
-      box(width = 12, textOutput("msePlot"))  # Add this line to display MSE
+      box(width = 12, plotlyOutput("msePlot")), # Add this line to display MSE
+      box(width = 12, plotlyOutput("c_p_model"))  # Add this line to display MSE
     )
   )
 )
@@ -100,6 +136,12 @@ server <- function(input, output, session) {
   data <- reactive({
     read_csv("TreatedData/test_set.csv")
   })
+
+  all_data <- reactive({
+    read_csv("TreatedData/data.csv")
+  })
+
+  
 
   reactive_lowess <- reactive({ # Accessing reactive data
     lowess(data()$Gestational_age, data()$Weight)   # LOWESS smoothing
@@ -210,6 +252,38 @@ server <- function(input, output, session) {
 
     return(residual_plot)
   })
+  # import du modèle p_c_model.rds*
+  model_p_c <- readRDS("./Models/p_c_model.rds")
+
+  output$c_p_model <- renderPlotly({
+
+    all_data <- load_full_data()
+    print(all_data)
+
+    gestational_age_range <- range(all_data$Gestational_age, na.rm = TRUE)
+
+    all_data <- expand.grid(
+      Gestational_age = seq(gestational_age_range[1], gestational_age_range[2], by = 0.5),
+      Maternal_age = quantile(all_data$Maternal_age, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Maternal_weight = quantile(all_data$Maternal_weight, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Maternal_height = quantile(all_data$Maternal_height, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Parity = unique(all_data$Parity),
+      Sex = unique(all_data$Sex),
+      Group = unique(all_data$Group))
+
+    print(all_data)
+
+    all_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = all_data))
+
+
+    p <- plot_percentiles(all_data,"Polynomial Model: Growth Percentiles", "black")
+
+    # Return the plot
+    p
+  })
+  
+
+  
 }
 
 shinyApp(ui = ui, server = server)
