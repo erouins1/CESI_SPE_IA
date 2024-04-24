@@ -36,26 +36,10 @@ predict_foetal_weight <- function(modelName, Maternal_age, Maternal_weight, Mate
   return(predictions)
 }
 
-# Calculates percentiles of weight per Gestational_age brackets for the data frame
-calculate_percentiles <- function(data) {
-  percentiles <- data %>%
-    group_by(Gestational_age) %>%
-    summarise(
-      P1 = quantile(Weight, 0.01, na.rm = TRUE, type = 3),
-      P3 = quantile(Weight, 0.03, na.rm = TRUE, type = 3),
-      P10 = quantile(Weight, 0.10, na.rm = TRUE, type = 3),
-      P90 = quantile(Weight, 0.90, na.rm = TRUE, type = 3),
-      P97 = quantile(Weight, 0.97, na.rm = TRUE, type = 3),
-      P99 = quantile(Weight, 0.99, na.rm = TRUE, type = 3),
-      .groups = 'keep'  # Ensures that the grouping variables are kept
-    )
-  return(percentiles)
-}
-
 library(dplyr)
 library(ggplot2)
 
-plot_percentiles <- function(data, title, color) {
+plot_percentiles <- function(data, data_scatter, title, color) {
   # Ensure that data is a dataframe and Weight_Poly_C is present as a column
   if("Weight_Poly_C" %in% names(data)) {
     data %>%
@@ -69,7 +53,8 @@ plot_percentiles <- function(data, title, color) {
         Percentile99 = quantile(Weight_Poly_C, 0.99, na.rm = TRUE)   # 99th percentile
       ) %>%
       ggplot(aes(x = Gestational_age)) +
-      geom_line(aes(y = Weight), color = color, size = 1.2) +
+      geom_point(data = data_scatter, aes(x = Gestational_age, y = Weight), color = "black", size = 1)+
+      # geom_line(aes(y = Weight), color = color, size = 1.2) +
       geom_line(aes(y = Percentile3), color = "blue", linetype = "dashed") +
       geom_line(aes(y = Percentile10), color = "green", linetype = "dashed") +
       geom_line(aes(y = Percentile90), color = "orange", linetype = "dashed") +
@@ -258,7 +243,7 @@ server <- function(input, output, session) {
   output$c_p_model <- renderPlotly({
 
     all_data <- load_full_data()
-    print(all_data)
+    data <- all_data
 
     gestational_age_range <- range(all_data$Gestational_age, na.rm = TRUE)
 
@@ -276,7 +261,7 @@ server <- function(input, output, session) {
     all_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = all_data))
 
 
-    p <- plot_percentiles(all_data,"Polynomial Model: Growth Percentiles", "black")
+    p <- plot_percentiles(all_data, data, "Polynomial Model: Growth Percentiles", "black")
 
     # Return the plot
     p
