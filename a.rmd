@@ -160,8 +160,61 @@ df$Group <- as.factor(df$Group)
 Nous allons normaliser les variables numériques pour les mettre à la même échelle.
 La fonction scale centre et réduit les données (moyenne de 0 et écart-type de 1)
 ---
+
+```{r}
+
+# Transformer Gestational_age de jours en semaines arrondies à l'entier supérieur
+df <- df %>%
+  mutate(Gestational_age = ceiling(Gestational_age / 7))
+
+```
+
+```{R}
+# Affichage d'un graphe pour visualiser la corrélation dans le temps ( gestational_age ) entre le poids et l'âge maternel
+
+ggplot(df, aes(x = Gestational_age,y = Weight, color = Maternal_age)) +
+  geom_point() +
+  ggtitle("Scatter plot of Weight vs Maternal_age and Gestational_age") +
+  xlab("Gestational_age") +
+  ylab("Weight")
+
+```
+
+```{R}
+# Affichage d'un graphe pour visualiser la corrélation dans le temps ( gestational_age ) entre le poids et le poids de la mère
+
+ggplot(df, aes(x = Gestational_age,y = Weight, color = Maternal_weight)) +
+  geom_point() +
+  ggtitle("Scatter plot of Weight vs Maternal_age and Gestational_age") +
+  xlab("Gestational_age") +
+  ylab("Weight")
+
+```
+```{R}
+# Affichage d'un graphe pour visualiser la corrélation dans le temps ( gestational_age ) entre le poids et la taille de la mère
+
+ggplot(df, aes(x = Gestational_age, y = Weight, color = Maternal_height)) +
+  geom_point() +
+  ggtitle("Scatter plot of Weight vs Maternal_age and Gestational_age") +
+  xlab("Maternal_age") +
+  ylab("Weight")
+
+```
+```{R}
+# Affichage d'un graphe pour visualiser la corrélation dans le temps ( gestational_age ) entre le poids et la parité
+
+ggplot(df, aes(x = Gestational_age, y = Weight, color = Parity)) +
+  geom_point() +
+  ggtitle("Scatter plot of Weight vs Maternal_age and Gestational_age") +
+  xlab("Gestational_age") +
+  ylab("Weight")
+
+```
+
 ```{r}
 library(caret)
+
+
 
 # Assuming 'df' is your full dataset
 set.seed(123) # for reproducibility
@@ -250,6 +303,7 @@ print(test_mse)
 # Export the model to a file
 saveRDS(model_p_c, "Models/p_c_model.rds")
 ```
+
 
 ```{r}
 model_poly <- train(
