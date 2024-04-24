@@ -39,7 +39,7 @@ predict_foetal_weight <- function(modelName, Maternal_age, Maternal_weight, Mate
 library(dplyr)
 library(ggplot2)
 
-plot_percentiles <- function(data, data_scatter, title, color) {
+plot_percentiles <- function(data, data_scatter, predicted_weight, title, color) {
   # Ensure that data is a dataframe and Weight_Poly_C is present as a column
   if("Weight_Poly_C" %in% names(data)) {
     data %>%
@@ -53,7 +53,8 @@ plot_percentiles <- function(data, data_scatter, title, color) {
         Percentile99 = quantile(Weight_Poly_C, 0.99, na.rm = TRUE)   # 99th percentile
       ) %>%
       ggplot(aes(x = Gestational_age)) +
-      geom_point(data = data_scatter, aes(x = Gestational_age, y = Weight), color = "black", size = 1)+
+      geom_point(data = data_scatter, aes(y = Weight), color = "black", size = 1)+
+      geom_point(data = predicted_weight, aes(y = Foetal_Weight), color = "red", size = 1)+
       # geom_line(aes(y = Weight), color = color, size = 1.2) +
       geom_line(aes(y = Percentile3), color = "blue", linetype = "dashed") +
       geom_line(aes(y = Percentile10), color = "green", linetype = "dashed") +
@@ -64,19 +65,6 @@ plot_percentiles <- function(data, data_scatter, title, color) {
   } else {
     stop("Weight_Poly_C column not found in the provided data.")
   }
-}
-
-smooth_percentiles <- function(percentiles){
-  smooth_percentiles <- data.frame(
-    Gestational_age = percentiles$Gestational_age,
-    P1 = lowess(percentiles$Gestational_age, percentiles$P1, f = 0.15)$y,
-    P3 = lowess(percentiles$Gestational_age, percentiles$P3, f = 0.15)$y, # Adjust f for smoothing span
-    P10 = lowess(percentiles$Gestational_age, percentiles$P10, f = 0.15)$y,
-    P90 = lowess(percentiles$Gestational_age, percentiles$P90, f = 0.15)$y,
-    P97 = lowess(percentiles$Gestational_age, percentiles$P97, f = 0.15)$y,
-    P99 = lowess(percentiles$Gestational_age, percentiles$P99, f = 0.15)$y
-  )
-  return(smooth_percentiles)
 }
 
 ui <- dashboardPage(
@@ -104,12 +92,12 @@ ui <- dashboardPage(
       sliderInput("MaternalHeightSlider", "Maternal Height (cm)", min = 120, max = 230, value = 165),
       selectInput("MaternalParity", "Maternal Parity", choices = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)),
       selectInput("ChildGender", "Child Gender", choices = c("Male", "Female")),
-      sliderInput("GestationalAgeSlider", "Gestational Age (days)", min = 120, max = 320, value = 270),
+      sliderInput("GestationalAgeSlider", "Gestational Age (week)", min = 15, max = 45, value = 38),
     )
   ),
   dashboardBody(
     fluidRow(
-      box(width = 12, plotlyOutput("plot")),
+      box(width = 12, plotlyOutput("maternal_age_baby_weight")),
       box(width = 12, plotlyOutput("result_compare_plot")),
       box(width = 12, plotlyOutput("msePlot")), # Add this line to display MSE
       box(width = 12, plotlyOutput("c_p_model"))  # Add this line to display MSE
@@ -118,69 +106,63 @@ ui <- dashboardPage(
 )
 
 server <- function(input, output, session) {
-  data <- reactive({
-    read_csv("TreatedData/test_set.csv")
-  })
-
-  all_data <- reactive({
-    read_csv("TreatedData/data.csv")
-  })
-
-  
-
-  reactive_lowess <- reactive({ # Accessing reactive data
-    lowess(data()$Gestational_age, data()$Weight)   # LOWESS smoothing
-  })
-
   predicted_point <- reactive({
-    predicted_weight <- predict_foetal_weight("./Models/polynomial_model.rds",
-                                              input$MaternalAgeSlider,
-                                              input$MaternalWeightSlider,
-                                              input$MaternalHeightSlider,
-                                              input$MaternalParity,
-                                              input$ChildGender,
-                                              input$GestationalAgeSlider)
-    data.frame(Gestational_age = floor(input$GestationalAgeSlider / 7),  # Convert to weeks here for consistency
-               Foetal_Weight = predicted_weight,
-               Actual_Weight = data()$Weight)  # Assume this matches by index/order
+      # Check all inputs for NULL or missing values
+      if(is.null(input$MaternalAgeSlider) || is.null(input$MaternalWeightSlider) ||
+        is.null(input$MaternalHeightSlider) || is.null(input$MaternalParity) ||
+        is.null(input$ChildGender) || is.null(input$GestationalAgeSlider)) {
+        return(NULL)
+      }
+      # Predict weight using the model
+      predicted_weight <- predict_foetal_weight(
+        modelName = "./Models/p_c_model.rds",
+        Maternal_age = input$MaternalAgeSlider,
+        Maternal_weight = input$MaternalWeightSlider,
+        Maternal_height = input$MaternalHeightSlider,
+        Parity = input$MaternalParity,
+        Sex = input$ChildGender,
+        Gestational_age = input$GestationalAgeSlider  # Ensure this is singular or correctly handled if array
+      )
+
+      # Create data frame to return
+      if (length(predicted_weight) == 0) {
+        return(NULL)  # Return NULL if no prediction was made
+      }
+
+      data.frame(
+        Gestational_age = input$GestationalAgeSlider,
+        Foetal_Weight = exp(predicted_weight),  # Assuming output needs to be exponentiated
+        Actual_Weight = load_data()$Weight  # Make sure load_data() reliably returns a compatible vector
+      )
   })
 
   predicted_points <- reactive({
+    data <- load_full_data()
     # Loop through the data and predict the foetal weight
-    predicted_weight <- predict_foetal_weight("./Models/polynomial_model.rds",
-                                              data()$Maternal_age,
-                                              data()$Maternal_weight,
-                                              data()$Maternal_height,
-                                              data()$Parity,
-                                              data()$Sex,
-                                              data()$Gestational_age)
+    predicted_weight <- predict_foetal_weight("./Models/p_c_model.rds",
+                                              data$Maternal_age,
+                                              data$Maternal_weight,
+                                              data$Maternal_height,
+                                              data$Parity,
+                                              data$Sex,
+                                              data$Gestational_age)
     data.frame(
-      Maternal_age = data()$Maternal_age,
-      Maternal_weight = data()$Maternal_weight,
-      Maternal_height = data()$Maternal_height,
-      Parity = data()$Parity,
-      Sex = data()$Sex,
-      Gestational_age = floor(data()$Gestational_age / 7),  # Convert to weeks here for consistency
-      Foetal_Weight = predicted_weight,
-      Actual_Weight = data()$Weight,  # Assume this matches by index/order
-      Residuals = (data()$Weight - predicted_weight)^2)  # Squared residuals
-  })
-
-  percentiles <- reactive({
-    df <- data()  # Make sure to call the reactive function to get the current data
-    calculate_percentiles(df)
-  })
-
-  smoothed_percentiles <- reactive({
-    percentiles <- percentiles()  # Access the reactive percentiles
-    smooth_percentiles(percentiles)
+      Maternal_age = data$Maternal_age,
+      Maternal_weight = data$Maternal_weight,
+      Maternal_height = data$Maternal_height,
+      Parity = data$Parity,
+      Sex = data$Sex,
+      Gestational_age = data$Gestational_age,  # Convert to weeks here for consistency
+      Foetal_Weight = exp(predicted_weight),
+      Actual_Weight = data$Weight,  # Assume this matches by index/order
+      Residuals = (data$Weight - predicted_weight))  # Squared residuals
   })
 
   mse_by_age <- reactive({
     df <- predicted_points()
     df %>%
       group_by(Gestational_age) %>%
-      summarise(MSE = mean(Residuals, na.rm = TRUE), .groups = 'drop')  # Calculate MSE per gestational age group
+      summarise(RMSE = sqrt(mean(Residuals, na.rm = TRUE)), .groups = 'drop')  # Calculate MSE per gestational age group
   })
 
   # Plot the MSE compared to the gestational age
@@ -188,60 +170,60 @@ server <- function(input, output, session) {
     mse_data <- mse_by_age()  # Access the reactive MSE data
 
     # Create the MSE plot
-    mse_plot <- plot_ly(data = mse_data, x = ~Gestational_age, y = ~MSE,
+    mse_plot <- plot_ly(data = mse_data, x = ~Gestational_age, y = ~RMSE,
                         type = 'scatter', mode = 'line+markers',
                         marker = list(color = 'rgba(255, 65, 54, 0.8)')) %>%
-      layout(title = "Mean Squared Error (MSE) by Gestational Age",
+      layout(title = "RMSE by Gestational Age",
              xaxis = list(title = "Gestational Age (weeks)"),
-             yaxis = list(title = "Mean Squared Error (MSE)"))
+             yaxis = list(title = "RMSE"))
 
     return(mse_plot)
   })
 
-  # Use plot percentiles function to create the plot
-  output$plot <- renderPlotly({
-    data <- data()  # Access reactive data
-    percentiles <- percentiles()  # Access reactive smoothed percentiles
-    req(percentiles)  # Ensure the percentiles are computed before plotting
-
-    p <- ggplot() +
-      geom_point(data = data, aes(x = Gestational_age, y = Weight, color = "Data Points"), size = 3, show.legend = TRUE) +  # Scatter plot first
-      geom_line(data = percentiles, aes(x = Gestational_age, y = P1, color = "1%")) +
-      geom_line(data = percentiles, aes(x = Gestational_age, y = P3, color = "3%")) +
-      geom_line(data = percentiles, aes(x = Gestational_age, y = P10, color = "10%")) +
-      geom_line(data = percentiles, aes(x = Gestational_age, y = P90, color = "90%")) +
-      geom_line(data = percentiles, aes(x = Gestational_age, y = P97, color = "97%")) +
-      geom_line(data = percentiles, aes(x = Gestational_age, y = P99, color = "99%")) +
-      scale_color_manual(values = c("Data Points" = "black", "1%" = "red", "3%" = "orange", "10%" = "blue", "90%" = "green", "97%" = "pink", "99%" = "purple")) +
-      labs(title = "Smoothed Percentiles of Weight by Gestational Age", y = "Weight", x = "Gestational Age") +
-      theme_minimal()
-
-    # Return the plot
-    p
+  processed_data <- reactive({
+    req(load_full_data())  # Ensure data is loaded
+    load_full_data() %>%
+      mutate(Gestational_Age_Group = cut(Gestational_age, breaks = c(12, 24, 36, 40), labels = c("First Trimester", "Second Trimester", "Third Trimester")),
+             Maternal_Age_Quartile = ntile(Maternal_age, 4))
   })
 
-  # Create a residual plot
-  output$result_compare_plot <- renderPlotly({
-    predicted_df <- predicted_points()
+  outcomes_by_group <- reactive({
+    req(processed_data())  # Ensure processed data is ready
+    processed_data() %>%
+      group_by(Gestational_Age_Group, Maternal_Age_Quartile) %>%
+      summarise(Weight = mean(Weight, na.rm = TRUE), .groups = 'drop')
+  })
 
-    # Calculate residuals
-    residuals <- predicted_df$Actual_Weight - predicted_df$Foetal_Weight
+  # Use plot percentiles function to create the plot
+  output$maternal_age_baby_weight <- renderPlotly({
+    # Ensure data is available
+    req(outcomes_by_group())
+    df <- outcomes_by_group()
 
-    # Create the residual plot
-    residual_plot <- plot_ly(data = predicted_df, x = ~Gestational_age, y = ~residuals,
-                             type = 'scatter', mode = 'markers',
-                             marker = list(color = 'rgba(255, 65, 54, 0.8)')) %>%
-      layout(title = "Residuals Plot",
-             xaxis = list(title = "Predicted Foetal Weight"),
-             yaxis = list(title = "Residuals (Actual Weight - Predicted Weight)"))
+    # Check if df is empty
+    if(nrow(df) == 0) {
+      return(NULL)  # If no data, return nothing
+    }
 
-    return(residual_plot)
+    # Ensure columns are not factors (as this could be part of the problem)
+    df$Gestational_Age_Group <- as.character(df$Gestational_Age_Group)
+    df$Maternal_Age_Quartile <- as.character(df$Maternal_Age_Quartile)
+
+    # Try creating the plot without dynamic colors first to ensure basic functionality
+    plot <- plot_ly(data = df, x = ~Gestational_Age_Group, y = ~Weight, type = 'bar', color = ~Maternal_Age_Quartile) %>%
+      layout(title = "Mean Outcome by Gestational Age Group and Weight Quartile",
+             xaxis = list(title = "Gestational Age Group"),
+             yaxis = list(title = "Mean Outcome"),
+             barmode = 'group')
+
+    # Return the plot
+    return(plot)
   })
   # import du modèle p_c_model.rds*
   model_p_c <- readRDS("./Models/p_c_model.rds")
 
   output$c_p_model <- renderPlotly({
-
+    predicted_df <- predicted_point()
     all_data <- load_full_data()
     data <- all_data
 
@@ -261,14 +243,21 @@ server <- function(input, output, session) {
     all_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = all_data))
 
 
-    p <- plot_percentiles(all_data, data, "Polynomial Model: Growth Percentiles", "black")
+    p <- plot_percentiles(all_data, data, predicted_df, "Polynomial Model: Growth Percentiles", "black")
 
     # Return the plot
     p
   })
-  
 
-  
+  output$result_compare_plot <- renderPlotly({
+    predicted_points <- predicted_points()
+    p <- ggplot(predicted_points, aes(x = Actual_Weight, y = Foetal_Weight)) +
+      geom_point() +
+      geom_abline(intercept = 0, slope = 1, color = "red") +
+      ggtitle("Mixed Linear Model: Predicted vs Actual Weights") +
+      xlab("Actual Weight") +
+      ylab("Predicted Weight")
+  })
 }
 
 shinyApp(ui = ui, server = server)
