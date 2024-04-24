@@ -118,10 +118,21 @@ boxplot(df$Weight, main = "Weight", ylab = "Y-axis Label")
 ```
 
 ---
+Concernant la parité, nous remarquons que la plupart des valeurs sont concentrées autour de 0 et 1, avec quelques valeurs aberrantes.
+L'écart étant très grand, nous allons supprimer les valeurs aberrantes.
+Avec seulement quelques données à la valeur élevée, il y aurait un risque que le modèle ne soit pas capable de généraliser correctement et ne sache pas comment traiter ces valeurs.
+---
+```{r}
+#Deleting entries with Parity greater than or equal to 5
+df <- df %>% filter(Parity < 5)
+boxplot(df$Parity, main = "Parity", ylab = "Y-axis Label")
+```
 Les deux dernières boites à moustache, l'une concernant le poids et l'autre l'âge gestationnel, démontrent une grande similitude.
 On peut donc supposer une corrélation apparente.
 
 Nous allons maintenant visualiser cette corrélation en utilisant un nuage de points. Cela nous permet de visuellement vérifier la présence de valeur aberrante pour le poids, ce qui est compliqué autrement étant donné que celui-ci dépend de la période de gestation.
+
+Nous tracerons ensuite des nuages de points de l'évolution dans le temps du poids selon chaque variable, prenant en compte la période de gestation.
 ---
 ```{r}
 library(ggplot2)
@@ -132,9 +143,60 @@ ggplot(df, aes(x = Gestational_age, y = Weight)) +
         xlab("Gestational_age") +
         ylab("Weight")
 ```
+```{r}
+# Graphe de l'évolution du poids du bébé dans le temps selon l'âge de la mère
+ggplot(df, aes(x = Maternal_age, y = Weight, color = Gestational_age)) +
+        geom_point() +
+        ggtitle("Scatter plot of Weight vs Maternal_age") +
+        xlab("Maternal_age") +
+        ylab("Weight")
 
+# Graphe de l'évolution du poids du bébé dans le temps selon le poids de la mère
+ggplot(df, aes(x = Maternal_weight, y = Weight, color = Gestational_age)) +
+        geom_point() +
+        ggtitle("Scatter plot of Weight vs Maternal_weight") +
+        xlab("Maternal_weight") +
+        ylab("Weight")
+
+# Graphe de l'évolution du poids du bébé dans le temps selon la taille de la mère
+ggplot(df, aes(x = Maternal_height, y = Weight, color = Gestational_age)) +
+        geom_point() +
+        ggtitle("Scatter plot of Weight vs Maternal_height") +
+        xlab("Maternal_height") +
+        ylab("Weight")
+
+# Graphe de l'évolution du poids du bébé dans le temps selon la parité
+ggplot(df, aes(x = Parity, y = Weight, color = Gestational_age)) +
+        geom_point() +
+        ggtitle("Scatter plot of Weight vs Parity") +
+        xlab("Parity") +
+        ylab("Weight")
+
+# Graphe de l'évolution du poids du bébé dans le temps selon le genre
+ggplot(df, aes(x = Sex, y = Weight, color = Gestational_age)) +
+        geom_point() +
+        ggtitle("Scatter plot of Weight vs Sex") +
+        xlab("Sex") +
+        ylab("Weight")
+```
+```{r}
+# Matrice de corrélation
+correlation_matrix <- cor(df[, c("Maternal_age", "Maternal_weight", "Maternal_height", "Parity", "Gestational_age", "Weight")])
+print(correlation_matrix)
+```
 ---
-#Préparation des données pour le modèle
+## Hypothèses
+La période de gestation est la variable la plus corrélée avec le poids du bébé, ce qui est logique.
+Néanmoins, nous avons également une corrélation significative entre le poids du bébé et le poids de la mère.
+Pour les autres variables, elles ont un impact sur le poids du bébé, mais il est moindre.
+Il n'y a pas de corrélation évidente entre les variables autres que le poids du bébé (hormis entre le poids et la taille de la mère, ce qui est logique et la corrélation n'est pas non plus si élevée).
+
+Notre courbe prédite suivra une tendance générale selon la période de gestation, mais il y aura des variations selon les autres variables, notamment le poids de la mère.
+
+De plus, maintenant que les valeurs aberrantes de parité sont supprimées, nous ne notons plus de valeurs aberrantes dans les autres variables.
+---
+---
+# Préparation des données pour le modèle
 
 ## 1- Encodage des variables catégorielles
 
@@ -445,7 +507,7 @@ comparison_data <- simulated_data %>%
                 Average_Weight_Mixed = mean(Weight_Mixed, na.rm = TRUE)
         )
 
-# Plot graph with curves from both models
+# Plot graph with curves from all models
 p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
         geom_line(aes(y = Average_Weight_Linear, colour = "Linear Model"), size = 1.2) +
         geom_line(aes(y = Average_Weight_Poly, colour = "Polynomial Model"), size = 1.2) +
@@ -464,23 +526,65 @@ print(p_poly_c)
 print(p_mixed)
 print(p_comparison)
 ```
-```{r}
-# simulated_data$Weight_Mixed <- predict(model_mixed, newdata = simulated_data)
-# p_mixed <- plot_percentiles(simulated_data, "Weight_Mixed", "Mixed Linear Model: Growth Percentiles", "grey")
-#
-# comparison_data <- simulated_data %>%
-#   group_by(Gestational_age) %>%
-#   summarise(
-#     Average_Weight_Mixed = mean(Weight_Mixed, na.rm = TRUE)  # adding average for mixed model
-#   )
-#
-# # Plot graph with curves from all models
-# p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
-#   geom_line(aes(y = Average_Weight_Mixed, colour = "Mixed Linear Model"), size = 1.2) +
-#   scale_colour_manual(values = c("Linear Model" = "blue", "Polynomial Model" = "red", "Polynomial C Model" = "black", "Mixed Linear Model" = "grey")) +
-#   labs(title = "Comparison of Model Predictions", y = "Average Predicted Weight", x = "Gestational Age", colour = "Model Type")
-#
-# # Print plots
-# print(p_mixed)
-```
 
+```{r}
+# Predicted label vs actual label comparison for the linear model
+comparison_data_linear <- data.frame(
+        Actual = test_set$Weight,
+        Predicted = predict(model_linear, newdata = test_set)
+)
+
+# Predicted label vs actual label comparison for the polynomial model
+comparison_data_poly <- data.frame(
+        Actual = test_set$Weight,
+        Predicted = predict(model_poly, newdata = test_set)
+)
+
+# Predicted label vs actual label comparison for the mixed linear model
+comparison_data_mixed <- data.frame(
+        Actual = test_set$Weight,
+        Predicted = predict(model_mixed, newdata = test_set)
+)
+
+# Predicted label vs actual label comparison for the poly-c model
+comparison_data_p_c <- data.frame(
+        Actual = test_set$Weight,
+        Predicted = exp(predict(model_p_c, newdata = test_set))
+)
+
+# Plot the comparison
+p_comparison_linear <- ggplot(comparison_data_linear, aes(x = Actual, y = Predicted)) +
+        geom_point() +
+        geom_abline(intercept = 0, slope = 1, color = "red") +
+        ggtitle("Linear Model: Predicted vs Actual Weights") +
+        xlab("Actual Weight") +
+        ylab("Predicted Weight")
+
+p_comparison_poly <- ggplot(comparison_data_poly, aes(x = Actual, y = Predicted)) +
+        geom_point() +
+        geom_abline(intercept = 0, slope = 1, color = "red") +
+        ggtitle("Polynomial Model: Predicted vs Actual Weights") +
+        xlab("Actual Weight") +
+        ylab("Predicted Weight")
+
+p_comparison_mixed <- ggplot(comparison_data_mixed, aes(x = Actual, y = Predicted)) +
+        geom_point() +
+        geom_abline(intercept = 0, slope = 1, color = "red") +
+        ggtitle("Mixed Linear Model: Predicted vs Actual Weights") +
+        xlab("Actual Weight") +
+        ylab("Predicted Weight")
+
+p_comparison_p_c <- ggplot(comparison_data_p_c, aes(x = Actual, y = Predicted)) +
+        geom_point() +
+        geom_abline(intercept = 0, slope = 1, color = "red") +
+        ggtitle("Polynomial C Model: Predicted vs Actual Weights") +
+        xlab("Actual Weight") +
+        ylab("Predicted Weight")
+
+# Print plots
+print(p_comparison_linear)
+print(p_comparison_poly)
+print(p_comparison_mixed)
+print(p_comparison_p_c)
+
+```
