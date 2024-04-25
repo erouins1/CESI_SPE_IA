@@ -425,6 +425,7 @@ plot_percentiles <- function(data, weight_col, title, color) {
           group_by(Gestational_age) %>%
           summarise(
                   Weight = mean(!!sym(weight_col), na.rm = TRUE),
+                  Percentile1 = quantile(!!sym(weight_col), 0.01, na.rm = TRUE),
                   Percentile3 = quantile(!!sym(weight_col), 0.03, na.rm = TRUE),
                   Percentile10 = quantile(!!sym(weight_col), 0.1, na.rm = TRUE),
                   Percentile90 = quantile(!!sym(weight_col), 0.9, na.rm = TRUE),
@@ -433,6 +434,7 @@ plot_percentiles <- function(data, weight_col, title, color) {
           ) %>%
           ggplot(aes(x = Gestational_age)) +
           geom_line(aes(y = Weight), color = color, size = 1.2) +
+          geom_line(aes(y = Percentile1), color = "pink", linetype = "dashed") +
           geom_line(aes(y = Percentile3), color = "blue", linetype = "dashed") +
           geom_line(aes(y = Percentile10), color = "green", linetype = "dashed") +
           geom_line(aes(y = Percentile90), color = "orange", linetype = "dashed") +
@@ -476,10 +478,6 @@ print(p_poly_c)
 print(p_mixed)
 print(p_comparison)
 ```
----
-Le modèle linéaire et le modèle mixte donnent exactement les mêmes résultats.
-Comme facteur aléatoire, nous avons utilisé le groupe, qui indique si l'expérience a été réalisée via infrarouge ou non.
-Nous souhaitions connaître si cela pouvait avoir une incidence.
 
 ```{r}
 # Predicted label vs actual label comparison for the linear model
@@ -527,4 +525,6 @@ print(p_comparison_linear)
 print(p_comparison_mixed)
 print(p_comparison_p_c)
 ```
+
+---
 
