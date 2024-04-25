@@ -323,7 +323,7 @@ train_control <- trainControl(
 
 # Fit the model using cross-validation
 model_linear <- train(
-  Weight ~ Maternal_age + Maternal_weight + Maternal_height + Parity + Sex + Gestational_age,
+  log(Weight) ~ Maternal_age + Maternal_weight + Maternal_height + Parity + Sex + Gestational_age,
   data = train_set,
   method = "lm",
   trControl = train_control
@@ -333,7 +333,7 @@ model_linear <- train(
 summary(model_linear)
 
 # Evaluate the model on the testing dataset
-predictions <- predict(model_linear, newdata = test_set)
+predictions <- exp(predict(model_linear, newdata = test_set))
 test_mse <- mean((test_set$Weight - predictions)^2)
 print(test_mse)
 
@@ -343,7 +343,7 @@ saveRDS(model_linear, "Models/linear_model.rds")
 ```{r}
 # Modèle polynomial de croissance
 model_p_c <- train(
-  log(Weight) ~ poly(Gestational_age, 2) + Maternal_age + Maternal_weight + Maternal_height + Parity + Sex,
+  log(Weight) ~ poly(Gestational_age, 3) + Maternal_age + Maternal_weight + Maternal_height + Parity + Sex,
   data = train_set,
   method = "lm",
   trControl = train_control
@@ -371,7 +371,7 @@ saveRDS(model_p_c, "Models/p_c_model.rds")
 
 ```{r}
 model_poly <- train(
-  Weight ~ poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
+  log(Weight) ~ poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
     poly(Maternal_height, 2) + poly(Parity, 2) +
     poly(Sex, 1) + poly(Gestational_age, 2),
   data = train_set,
@@ -383,7 +383,7 @@ model_poly <- train(
 summary(model_poly)
 
 # Evaluate the model on the testing dataset
-predictions <- predict(model_poly, newdata = test_set)
+predictions <- exp(predict(model_poly, newdata = test_set))
 test_mse <- mean((test_set$Weight - predictions)^2)
 print(test_mse)
 
@@ -410,11 +410,11 @@ for (i in 1:n_folds) {
   testing_data <- train_set[test_indices, ]
 
   # Fit the model on training data
-  model_mixed <- lmer(Weight ~ Maternal_age + Maternal_weight + Maternal_height +
+  model_mixed <- lmer(log(Weight) ~ Maternal_age + Maternal_weight + Maternal_height +
     Parity + Sex + Gestational_age + (1 | Group), data = training_data)
 
   # Predict and calculate MSE on the testing fold
-  predictions <- predict(model_mixed, newdata = testing_data, re.form = NA)  # NA to ignore random effects
+  predictions <- exp(predict(model_mixed, newdata = testing_data, re.form = NA))  # NA to ignore random effects
   mse_results[i] <- mean((testing_data$Weight - predictions)^2)
 }
 
@@ -454,10 +454,10 @@ print(levels(simulated_data$Group))
 
 # Predict weights for the entire grid for both models
 # Predict weights for the entire grid for all models
-simulated_data$Weight_Linear <- predict(model_linear, newdata = simulated_data)
-simulated_data$Weight_Poly <- predict(model_poly, newdata = simulated_data)
+simulated_data$Weight_Linear <- exp(predict(model_linear, newdata = simulated_data))
+simulated_data$Weight_Poly <- exp(predict(model_poly, newdata = simulated_data))
 simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
-simulated_data$Weight_Mixed <- predict(model_mixed, newdata = simulated_data)
+simulated_data$Weight_Mixed <- exp(predict(model_mixed, newdata = simulated_data))
 
 
 # Function to calculate and plot percentiles
@@ -492,10 +492,10 @@ p_mixed <- plot_percentiles(simulated_data, "Weight_Mixed", "Mixed Linear Model:
 
 ```{r}
 # Predict weights for the entire grid for both models
-simulated_data$Weight_Linear <- predict(model_linear, newdata = simulated_data)
-simulated_data$Weight_Poly <- predict(model_poly, newdata = simulated_data)
+simulated_data$Weight_Linear <- exp(predict(model_linear, newdata = simulated_data))
+simulated_data$Weight_Poly <- exp(predict(model_poly, newdata = simulated_data))
 simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
-simulated_data$Weight_Mixed <- predict(model_mixed, newdata = simulated_data)
+simulated_data$Weight_Mixed <- exp(predict(model_mixed, newdata = simulated_data))
 
 # Calculate average weights for each gestational age for both models
 comparison_data <- simulated_data %>%
