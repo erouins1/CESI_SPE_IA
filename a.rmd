@@ -318,7 +318,8 @@ saveRDS(model_linear, "Models/linear_model.rds")
 ```{r}
 # Modèle polynomial de croissance
 model_p_c <- train(
-  log(Weight) ~ poly(Gestational_age, 3) + Maternal_age + Maternal_weight + Maternal_height + Parity + Sex,
+  log(Weight) ~ poly(Gestational_age, 2) + Gestational_age + Maternal_age + Maternal_weight + Maternal_height + Parity + Sex + poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
+          poly(Maternal_height, 2) + poly(Parity, 2),
   data = train_set,
   method = "lm",
   trControl = train_control
@@ -391,6 +392,7 @@ library(ggplot2)
 library(dplyr)
 
 # Create a grid of data to simulate a wider variety of input scenarios
+
 simulated_data <- expand.grid(
         Gestational_age = seq(min(df$Gestational_age), max(df$Gestational_age), by = 0.5),
         Maternal_age = quantile(df$Maternal_age, c(0.25, 0.5, 0.75)),
