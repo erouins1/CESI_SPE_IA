@@ -525,6 +525,139 @@ print(p_comparison_linear)
 print(p_comparison_mixed)
 print(p_comparison_p_c)
 ```
+```{r}
+# Residuals for all models
+residuals_linear <- residuals(model_linear)
+residuals_mixed <- residuals(model_mixed)
+residuals_p_c <- residuals(model_p_c)
 
----
+# Plot residuals for all models
+p_residuals_linear <- ggplot(data.frame(Residuals = residuals_linear), aes(x = Residuals)) +
+        geom_histogram(bins = 30, fill = "blue") +
+        ggtitle("Linear Model: Residuals Distribution") +
+        xlab("Residuals") +
+        ylab("Frequency")
+
+p_residuals_mixed <- ggplot(data.frame(Residuals = residuals_mixed), aes(x = Residuals)) +
+        geom_histogram(bins = 30, fill = "green") +
+        ggtitle("Mixed Linear Model: Residuals Distribution") +
+        xlab("Residuals") +
+        ylab("Frequency")
+
+p_residuals_p_c <- ggplot(data.frame(Residuals = residuals_p_c), aes(x = Residuals)) +
+        geom_histogram(bins = 30, fill = "red") +
+        ggtitle("Polynomial C Model: Residuals Distribution") +
+        xlab("Residuals") +
+        ylab("Frequency")
+
+# Print plots
+print(p_residuals_linear)
+print(p_residuals_mixed)
+print(p_residuals_p_c)
+```
+```{r}
+# Calculations of the R2 scores for all models
+r2_linear <- cor(test_set$Weight, exp(predict(model_linear, newdata = test_set)))^2
+r2_mixed <- cor(test_set$Weight, exp(predict(model_mixed, newdata = test_set)))^2
+r2_p_c <- cor(test_set$Weight, exp(predict(model_p_c, newdata = test_set)))^2
+
+print(r2_linear)
+print(r2_mixed)
+print(r2_p_c)
+```
+```{r}
+# Calculations of the RMSE for all models
+rmse_linear <- sqrt(mean((test_set$Weight - exp(predict(model_linear, newdata = test_set)))^2))
+rmse_mixed <- sqrt(mean((test_set$Weight - exp(predict(model_mixed, newdata = test_set)))^2))
+rmse_p_c <- sqrt(mean((test_set$Weight - exp(predict(model_p_c, newdata = test_set)))^2))
+
+print(rmse_linear)
+print(rmse_mixed)
+print(rmse_p_c)
+```
+
+```{r}
+# Linear model R2 score for gestational age < 23
+test_set_group1 <- test_set[test_set$Group == 1, ]
+r2_linear_group1 <- cor(test_set_group1$Weight, exp(predict(model_linear, newdata = test_set_group1)))^2
+
+# Linear model R2 score for gestational age 23-33
+test_set_group2 <- test_set[test_set$Group == 2, ]
+r2_linear_group2 <- cor(test_set_group2$Weight, exp(predict(model_linear, newdata = test_set_group2)))^2
+
+# Linear model R2 score for gestational age 34-36
+test_set_group3 <- test_set[test_set$Group == 3, ]
+r2_linear_group3 <- cor(test_set_group3$Weight, exp(predict(model_linear, newdata = test_set_group3)))^2
+
+# Linear model R2 score for gestational age > 36
+test_set_group4 <- test_set[test_set$Group == 4, ]
+r2_linear_group4 <- cor(test_set_group4$Weight, exp(predict(model_linear, newdata = test_set_group4)))^2
+
+print(r2_linear_group1)
+print(r2_linear_group2)
+print(r2_linear_group3)
+print(r2_linear_group4)
+```
+
+```{r}
+# Polynomial C model R2 score for gestational age < 23
+r2_p_c_group1 <- cor(test_set_group1$Weight, exp(predict(model_p_c, newdata = test_set_group1)))^2
+
+# Polynomial C model R2 score for gestational age 23-33
+r2_p_c_group2 <- cor(test_set_group2$Weight, exp(predict(model_p_c, newdata = test_set_group2)))^2
+
+# Polynomial C model R2 score for gestational age 34-36
+r2_p_c_group3 <- cor(test_set_group3$Weight, exp(predict(model_p_c, newdata = test_set_group3)))^2
+
+# Polynomial C model R2 score for gestational age > 36
+r2_p_c_group4 <- cor(test_set_group4$Weight, exp(predict(model_p_c, newdata = test_set_group4)))^2
+
+print(r2_p_c_group1)
+print(r2_p_c_group2)
+print(r2_p_c_group3)
+print(r2_p_c_group4)
+```
+
+```{r}
+# Amount of foetuses over 90th percentile according to our polynomial model
+test_set$Predicted_Weight_Poly_C <- exp(predict(model_p_c, newdata = test_set))
+test_set$Predicted_Weight_Poly_C <- as.numeric(test_set$Predicted_Weight_Poly_C)
+test_set$Weight <- as.numeric(test_set$Weight)
+
+test_set$Over_90th_Percentile <- ifelse(test_set$Predicted_Weight_Poly_C > quantile(test_set$Predicted_Weight_Poly_C, 0.9), 1, 0)
+over_90th_percentile <- sum(test_set$Over_90th_Percentile)
+print(over_90th_percentile)
+
+# Amount of foetuses under 10th percentile according to our polynomial model
+test_set$Under_10th_Percentile <- ifelse(test_set$Predicted_Weight_Poly_C < quantile(test_set$Predicted_Weight_Poly_C, 0.1), 1, 0)
+under_10th_percentile <- sum(test_set$Under_10th_Percentile)
+print(under_10th_percentile)
+```
+
+```{r}
+# To assess the performance of the percentile growth curves, it is necessary to estimate the rate of weights that fall above or below a percentile curve.
+test_set$Predicted_Weight_Poly_C <- exp(predict(model_p_c, newdata = test_set))
+test_set$Predicted_Weight_Poly_C <- as.numeric(test_set$Predicted_Weight_Poly_C)
+test_set$Weight <- as.numeric(test_set$Weight)
+
+test_set$Over_90th_Percentile <- ifelse(test_set$Predicted_Weight_Poly_C > quantile(test_set$Predicted_Weight_Poly_C, 0.9), 1, 0)
+over_90th_percentile <- sum(test_set$Over_90th_Percentile)
+
+
+# Value in percentage
+over_90th_percentile_percent <- over_90th_percentile / nrow(test_set) * 100
+
+print(over_90th_percentile)
+print(over_90th_percentile_percent)
+
+# Amount of foetuses under 10th percentile according to our polynomial model
+test_set$Under_10th_Percentile <- ifelse(test_set$Predicted_Weight_Poly_C < quantile(test_set$Predicted_Weight_Poly_C, 0.1), 1, 0)
+under_10th_percentile <- sum(test_set$Under_10th_Percentile)
+
+# Value in percentage
+under_10th_percentile_percent <- under_10th_percentile / nrow(test_set) * 100
+
+print(under_10th_percentile)
+print(under_10th_percentile_percent)
+```
 
