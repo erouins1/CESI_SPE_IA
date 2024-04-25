@@ -1,6 +1,6 @@
 
 ---
-title: "pas mal"
+title: "Fetus Weight Prediction"
 output: "html_document"
 date: "2024-09-04"
 ---
@@ -278,34 +278,12 @@ ggplot(df, aes(x = Gestational_age, y = Weight, color = Parity)) +
 ```{r}
 library(caret)
 
-
-
-# Assuming 'df' is your full dataset
 set.seed(123) # for reproducibility
 splitIndex <- createDataPartition(df$Weight, p = 0.8, list = FALSE)
 
 # Create training and testing datasets
 train_set <- df[splitIndex, ]
 test_set <- df[-splitIndex, ]
-
-```
-```{r}
-head(df)
-```
-```{r}
-
-# Select only numeric columns for scaling
-#numeric_columns <- train_set[, sapply(train_set, is.numeric)]
-
-#scaled_numeric_columns  <- scale(numeric_columns, center = TRUE, scale = TRUE)
-
-# Combine scaled numeric columns back with non-numeric columns
-#df_s <- cbind(df[, sapply(df, Negate(is.numeric))], as.data.frame(scaled_numeric_columns))
-
-
-#summary(df_s)
-
-
 
 ```
 ```{r}
@@ -317,9 +295,6 @@ train_control <- trainControl(
 )
 ```
 ```{r}
-# Fit the linear model on the training dataset
-# model_linear <- lm(Weight ~ Maternal_age + Maternal_weight +
-#         Maternal_height + Parity + Sex + Gestational_age, data = train_set)
 
 # Fit the model using cross-validation
 model_linear <- train(
@@ -369,27 +344,7 @@ saveRDS(model_p_c, "Models/p_c_model.rds")
 ```
 
 
-```{r}
-model_poly <- train(
-  log(Weight) ~ poly(Maternal_age, 2) + poly(Maternal_weight, 2) +
-    poly(Maternal_height, 2) + poly(Parity, 2) +
-    poly(Sex, 1) + poly(Gestational_age, 2),
-  data = train_set,
-  method = "lm",
-  trControl = train_control
-)
 
-
-summary(model_poly)
-
-# Evaluate the model on the testing dataset
-predictions <- exp(predict(model_poly, newdata = test_set))
-test_mse <- mean((test_set$Weight - predictions)^2)
-print(test_mse)
-
-# Export the model to a file
-saveRDS(model_poly, "Models/polynomial_model.rds")
-```
 ```{r}
 # Mixed linear model
 library(lme4)
@@ -446,16 +401,9 @@ simulated_data <- expand.grid(
         Group = factor(levels(df$Group))
 )
 
-print(head(simulated_data))
-
-
-print(levels(train_set$Group))
-print(levels(simulated_data$Group))
-
-# Predict weights for the entire grid for both models
 # Predict weights for the entire grid for all models
 simulated_data$Weight_Linear <- exp(predict(model_linear, newdata = simulated_data))
-simulated_data$Weight_Poly <- exp(predict(model_poly, newdata = simulated_data))
+
 simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
 simulated_data$Weight_Mixed <- exp(predict(model_mixed, newdata = simulated_data))
 
@@ -484,25 +432,18 @@ plot_percentiles <- function(data, weight_col, title, color) {
 
 # Plot percentiles for both models
 p_linear <- plot_percentiles(simulated_data, "Weight_Linear", "Linear Model: Growth Percentiles", "black")
-p_poly <- plot_percentiles(simulated_data, "Weight_Poly", "Polynomial Model: Growth Percentiles", "black")
 p_poly_c <- plot_percentiles(simulated_data, "Weight_Poly_C", "Polynomial Model: Growth Percentiles", "black")
 p_mixed <- plot_percentiles(simulated_data, "Weight_Mixed", "Mixed Linear Model: Growth Percentiles", "black")
 
 ```
 
 ```{r}
-# Predict weights for the entire grid for both models
-simulated_data$Weight_Linear <- exp(predict(model_linear, newdata = simulated_data))
-simulated_data$Weight_Poly <- exp(predict(model_poly, newdata = simulated_data))
-simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
-simulated_data$Weight_Mixed <- exp(predict(model_mixed, newdata = simulated_data))
 
-# Calculate average weights for each gestational age for both models
+# Calculate average weights for each gestational age for all models
 comparison_data <- simulated_data %>%
         group_by(Gestational_age) %>%
         summarise(
                 Average_Weight_Linear = mean(Weight_Linear, na.rm = TRUE),
-                Average_Weight_Poly = mean(Weight_Poly, na.rm = TRUE),
                 Average_Weight_Poly_C = mean(Weight_Poly_C, na.rm = TRUE),
                 Average_Weight_Mixed = mean(Weight_Mixed, na.rm = TRUE)
         )
@@ -510,7 +451,6 @@ comparison_data <- simulated_data %>%
 # Plot graph with curves from all models
 p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
         geom_line(aes(y = Average_Weight_Linear, colour = "Linear Model"), size = 1.2) +
-        geom_line(aes(y = Average_Weight_Poly, colour = "Polynomial Model"), size = 1.2) +
         geom_line(aes(y = Average_Weight_Poly_C, colour = "Polynomial C Model"), size = 1.2) +
         geom_line(aes(y = Average_Weight_Mixed, colour = "Mixed Linear Model"), size = 1.2) +
         scale_colour_manual(values = c("Linear Model" = "blue", "Polynomial Model" = "red", "Polynomial C Model" = "black", "Mixed Linear Model" = "green")) +
@@ -521,7 +461,6 @@ p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
 
 # Print plots
 print(p_linear)
-print(p_poly)
 print(p_poly_c)
 print(p_mixed)
 print(p_comparison)
@@ -531,19 +470,13 @@ print(p_comparison)
 # Predicted label vs actual label comparison for the linear model
 comparison_data_linear <- data.frame(
         Actual = test_set$Weight,
-        Predicted = predict(model_linear, newdata = test_set)
-)
-
-# Predicted label vs actual label comparison for the polynomial model
-comparison_data_poly <- data.frame(
-        Actual = test_set$Weight,
-        Predicted = predict(model_poly, newdata = test_set)
+        Predicted = exp(predict(model_linear, newdata = test_set))
 )
 
 # Predicted label vs actual label comparison for the mixed linear model
 comparison_data_mixed <- data.frame(
         Actual = test_set$Weight,
-        Predicted = predict(model_mixed, newdata = test_set)
+        Predicted = exp(predict(model_mixed, newdata = test_set))
 )
 
 # Predicted label vs actual label comparison for the poly-c model
@@ -557,13 +490,6 @@ p_comparison_linear <- ggplot(comparison_data_linear, aes(x = Actual, y = Predic
         geom_point() +
         geom_abline(intercept = 0, slope = 1, color = "red") +
         ggtitle("Linear Model: Predicted vs Actual Weights") +
-        xlab("Actual Weight") +
-        ylab("Predicted Weight")
-
-p_comparison_poly <- ggplot(comparison_data_poly, aes(x = Actual, y = Predicted)) +
-        geom_point() +
-        geom_abline(intercept = 0, slope = 1, color = "red") +
-        ggtitle("Polynomial Model: Predicted vs Actual Weights") +
         xlab("Actual Weight") +
         ylab("Predicted Weight")
 
@@ -583,8 +509,7 @@ p_comparison_p_c <- ggplot(comparison_data_p_c, aes(x = Actual, y = Predicted)) 
 
 # Print plots
 print(p_comparison_linear)
-print(p_comparison_poly)
 print(p_comparison_mixed)
 print(p_comparison_p_c)
-
 ```
+
