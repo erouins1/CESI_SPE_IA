@@ -249,7 +249,7 @@ server <- function(input, output, session) {
       Parity = data$Parity,
       Sex = data$Sex,
       Gestational_age = data$Gestational_age,  # Convert to weeks here for consistency
-      Foetal_Weight = predicted_weight,
+      Foetal_Weight = exp(predicted_weight),
       Actual_Weight = data$Weight,  # Assume this matches by index/order
       Residuals = (data$Weight - predicted_weight))  # Squared residuals
   })
@@ -383,7 +383,7 @@ server <- function(input, output, session) {
       Sex = unique(all_data$Sex),
       Group = unique(all_data$Group))
 
-    all_data$Weight_Predicted <- predict(model_linear, newdata = all_data)
+    all_data$Weight_Predicted <- exp(predict(model_linear, newdata = all_data))
 
     p <- plot_percentiles(all_data, data, predicted_df, "Linear Model: Growth Percentiles", "black")
 
