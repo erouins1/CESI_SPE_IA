@@ -64,13 +64,10 @@ print(freq_sex)
 ---
 Il y a une répartition égale entre les enfants de sexe masculin et féminin, ce qui est un bon signe pour l'analyse des données.
 
-On crée une colonne groupe selon l'ID pour séparer les 2 types d'expérience différentes.
-Nous n'avons ensuite plus besoin de l'ID (noté "...1").
+Nous n'avons plus besoin de l'ID (noté "...1").
 ---
 
 ```{r}
-df$Group <- ifelse(df$...1 <= 6000, 1, 2)
-
 if ("...1" %in% names(df)) {
   df <- subset(df, select = -1)
 }
@@ -107,6 +104,12 @@ Parity est booléen, c'est donc normal d'avoir des valeurs nulles. En revanche, 
 df <- df %>% filter(Maternal_weight != 0)
 zero_counts <- colSums(df == 0)
 print(zero_counts)
+```
+```{r}
+# Checking for duplicated lines
+duplicated_rows <- df[duplicated(df), ]
+print(duplicated_rows)
+print(nrow(duplicated_rows))
 ```
 ```{r}
 boxplot(df$Maternal_age, main = "Maternal age", ylab = "Y-axis Label")
@@ -200,7 +203,7 @@ De plus, maintenant que les valeurs aberrantes de parité sont supprimées, nous
 
 ## 1- Encodage des variables catégorielles
 
-Il existe une variable catégorielle dans notre jeu de données, le sexe de l'enfant. Nous allons l'encoder en utilisant la méthode de one-hot encoding.
+Il existe une variable catégorielle dans notre jeu de données, le sexe de l'enfant. Nous allons donc l'encoder en utilisant la fonction as.factor.
 ---
 
 ```{r}
@@ -208,16 +211,15 @@ library(mltools)
 library(data.table)
 
 df$Sex <- as.factor(df$Sex)
-df$Group <- as.factor(df$Group)
- #df_e <- one_hot(as.data.table(df))
-#head(df_e)
 
 ```
 ---
 ## 2- Normalisation et standardisation
 
-Nous allons normaliser les variables numériques pour les mettre à la même échelle.
-La fonction scale centre et réduit les données (moyenne de 0 et écart-type de 1)
+Nous allons maintenannt passer la période de gestation en semaine au lieu d'en jour.
+
+Ensuite, nous pourrons créer une variable groupe qui sera utilisée pour un de nos modèles.
+Sa valeur, de 1 à 4, dépend de la période de gestation.
 ---
 
 ```{r}
@@ -225,6 +227,14 @@ La fonction scale centre et réduit les données (moyenne de 0 et écart-type de
 # Transformer Gestational_age de jours en semaines arrondies à l'entier supérieur
 df <- df %>%
   mutate(Gestational_age = ceiling(Gestational_age / 7))
+
+# Assigning a group to each line according to the gestational age
+# Group 1 for gestational age : <23
+# Group 2 for gestational age : 23-33
+# Group 3 for gestational age : 34-36
+# Group 4 for gestational age : >36
+df$Group <- ifelse(df$Gestational_age < 23, 1, ifelse(df$Gestational_age < 34, 2, ifelse(df$Gestational_age < 37, 3, 4)))
+df$Group <- as.factor(df$Group)
 
 # vérifie que le fichier data.csv existe déjà
 if (!file.exists("TreatedData/data.csv")) {
@@ -249,7 +259,7 @@ ggplot(df, aes(x = Gestational_age,y = Weight, color = Maternal_age)) +
 
 ggplot(df, aes(x = Gestational_age,y = Weight, color = Maternal_weight)) +
   geom_point() +
-  ggtitle("Scatter plot of Weight vs Maternal_age and Gestational_age") +
+  ggtitle("Scatter plot of Weight vs Maternal_weight and Gestational_age") +
   xlab("Gestational_age") +
   ylab("Weight")
 
@@ -259,7 +269,7 @@ ggplot(df, aes(x = Gestational_age,y = Weight, color = Maternal_weight)) +
 
 ggplot(df, aes(x = Gestational_age, y = Weight, color = Maternal_height)) +
   geom_point() +
-  ggtitle("Scatter plot of Weight vs Maternal_age and Gestational_age") +
+  ggtitle("Scatter plot of Weight vs Maternal_height and Gestational_age") +
   xlab("Maternal_age") +
   ylab("Weight")
 
@@ -269,7 +279,7 @@ ggplot(df, aes(x = Gestational_age, y = Weight, color = Maternal_height)) +
 
 ggplot(df, aes(x = Gestational_age, y = Weight, color = Parity)) +
   geom_point() +
-  ggtitle("Scatter plot of Weight vs Maternal_age and Gestational_age") +
+  ggtitle("Scatter plot of Weight vs Parity and Gestational_age") +
   xlab("Gestational_age") +
   ylab("Weight")
 
@@ -370,7 +380,7 @@ for (i in 1:n_folds) {
     Parity + Sex + Gestational_age + (1 | Group), data = training_data)
 
   # Predict and calculate MSE on the testing fold
-  predictions <- exp(predict(model_mixed, newdata = testing_data, re.form = NA))  # NA to ignore random effects
+  predictions <- exp(predict(model_mixed, newdata = testing_data))
   mse_results[i] <- mean((testing_data$Weight - predictions)^2)
 }
 
@@ -405,7 +415,6 @@ simulated_data <- expand.grid(
 
 # Predict weights for the entire grid for all models
 simulated_data$Weight_Linear <- exp(predict(model_linear, newdata = simulated_data))
-
 simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
 simulated_data$Weight_Mixed <- exp(predict(model_mixed, newdata = simulated_data))
 
@@ -467,6 +476,10 @@ print(p_poly_c)
 print(p_mixed)
 print(p_comparison)
 ```
+---
+Le modèle linéaire et le modèle mixte donnent exactement les mêmes résultats.
+Comme facteur aléatoire, nous avons utilisé le groupe, qui indique si l'expérience a été réalisée via infrarouge ou non.
+Nous souhaitions connaître si cela pouvait avoir une incidence.
 
 ```{r}
 # Predicted label vs actual label comparison for the linear model
