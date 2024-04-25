@@ -18,35 +18,41 @@ load_full_data <- function() {
   return(full_data)
 }
 
-predict_foetal_weight_poly <- function(Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_ages) {
+GroupData <- function (Gestational_age) {
+  Group <- ifelse(Gestational_age < 23, 1, ifelse(Gestational_age < 34, 2, ifelse(Gestational_age < 37, 3, 4)))
+  Group <- as.factor(Group)
+  return(Group)
+}
+
+predict_foetal_weight_poly <- function(Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_age) {
   model <- readRDS("./Models/p_c_model.rds")
 
 
-  predictions <- vector("numeric", length(Gestational_ages))  # Pre-allocate the vector
-  for (i in seq_along(Gestational_ages)) {
+  predictions <- vector("numeric", length(Gestational_age))  # Pre-allocate the vector
+  for (i in seq_along(Gestational_age)) {
     data <- data.frame(
       Maternal_age = as.numeric(Maternal_age[i]),
       Maternal_weight = as.numeric(Maternal_weight[i]),
       Maternal_height = as.numeric(Maternal_height[i]),
       Parity = as.numeric(Parity[i]),
       Sex = as.factor(Sex[i]),
-      Gestational_age = Gestational_ages[i]
+      Gestational_age = Gestational_age[i]
     )
     predictions[i] <- predict(model, newdata = data)
   }
   return(predictions)
 }
 
-predict_foetal_weight_linear <- function(Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_ages) {
+predict_foetal_weight_linear <- function(Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_age) {
   model <- readRDS("./Models/linear_model.rds")
-  if (length(Gestational_ages) == 0) {
+  if (length(Gestational_age) == 0) {
     stop("Gestational_ages is missing or empty.")
   }
 
-  predictions <- vector("numeric", length(Gestational_ages))
-  for (i in seq_along(Gestational_ages)) {
+  predictions <- vector("numeric", length(Gestational_age))
+  for (i in seq_along(Gestational_age)) {
     # Check each input to make sure it's not NULL
-    if (is.null(Maternal_age[i]) || is.null(Maternal_weight[i]) || is.null(Maternal_height[i]) || is.null(Parity[i]) || is.null(Sex[i])) {
+    if (is.null(Maternal_age[i]) || is.null(Maternal_weight[i]) || is.null(Maternal_height[i]) || is.null(Parity[i]) || is.null(Sex[i]))  {
       stop("One of the required parameters is missing a value at index: ", i)
     }
     data <- data.frame(
@@ -55,7 +61,7 @@ predict_foetal_weight_linear <- function(Maternal_age, Maternal_weight, Maternal
       Maternal_height = as.numeric(Maternal_height[i]),
       Parity = as.numeric(Parity[i]),
       Sex = as.factor(Sex[i]),
-      Gestational_age = Gestational_ages[i]
+      Gestational_age = Gestational_age[i]
     )
     predictions[i] <- predict(model, newdata = data)
   }
@@ -73,6 +79,7 @@ plot_percentiles <- function(data, data_scatter, predicted_weight, title, color)
       group_by(Gestational_age) %>%
       summarise(
         Weight = mean(Weight_Predicted, na.rm = TRUE),  # Calculate mean weight
+        Percentile1 = quantile(Weight_Predicted, 0.01, na.rm = TRUE),  # 3rd percentile
         Percentile3 = quantile(Weight_Predicted, 0.03, na.rm = TRUE),  # 3rd percentile
         Percentile10 = quantile(Weight_Predicted, 0.1, na.rm = TRUE),  # 10th percentile
         Percentile90 = quantile(Weight_Predicted, 0.9, na.rm = TRUE),  # 90th percentile
@@ -83,6 +90,7 @@ plot_percentiles <- function(data, data_scatter, predicted_weight, title, color)
       geom_point(data = data_scatter, aes(y = Weight), color = "black", size = 1)+
       geom_point(data = predicted_weight, aes(y = Foetal_Weight), color = "red", size = 1)+
       # geom_line(aes(y = Weight), color = color, size = 1.2) +
+      geom_line(aes(y = Percentile1), color = "pink", linetype = "dashed") +
       geom_line(aes(y = Percentile3), color = "blue", linetype = "dashed") +
       geom_line(aes(y = Percentile10), color = "green", linetype = "dashed") +
       geom_line(aes(y = Percentile90), color = "orange", linetype = "dashed") +
@@ -133,12 +141,17 @@ ui <- dashboardPage(
     )
   ),
   dashboardBody(
-    # Create a row of 2 boxe
+    fluidRow(
+      width= 12,
+      box(title = "R^2 Score Polynomial Model", status = "primary", solidHeader = TRUE, width = 6,
+          textOutput("r2Poly")),
+      box(title = "R^2 Score Linear Model", status = "primary", solidHeader = TRUE, width = 6,
+          textOutput("r2Linear"))
+    ),
     fluidRow(
       width = 12,
-      box(width = 4, plotlyOutput("maternal_age_baby_weight")),
-      box(width = 4, plotlyOutput("msePlotPoly")),
-      box(width = 4, plotlyOutput("msePlotLinear")),
+      box(width = 6, plotlyOutput("c_p_model")),
+      box(width = 6, plotlyOutput("linear_model"))
     ),
     fluidRow(
       width = 12,
@@ -147,8 +160,9 @@ ui <- dashboardPage(
     ),
     fluidRow(
       width = 12,
-      box(width = 6, plotlyOutput("c_p_model")),
-      box(width = 6, plotlyOutput("linear_model"))
+      box(width = 4, plotlyOutput("maternal_age_baby_weight")),
+      box(width = 4, plotlyOutput("residualsPlotLinear")),
+      box(width = 4, plotlyOutput("residualsPlotPoly")),
     ),
   )
 )
@@ -197,7 +211,7 @@ server <- function(input, output, session) {
       Maternal_height = input$MaternalHeightSlider,
       Parity = input$MaternalParity,
       Sex = input$ChildGender,
-      Gestational_age = input$GestationalAgeSlider  # Ensure this is singular or correctly handled if array
+      Gestational_age = input$GestationalAgeSlider
     )
 
     # Create data frame to return
@@ -207,15 +221,16 @@ server <- function(input, output, session) {
 
     data.frame(
       Gestational_age = input$GestationalAgeSlider,
-      Foetal_Weight = exp(predicted_weight),  # Assuming output needs to be exponentiated
-      Actual_Weight = load_data()$Weight  # Make sure load_data() reliably returns a compatible vector
+      Foetal_Weight = exp(predicted_weight),
+      Actual_Weight = load_data()$Weight
     )
   })
 
   predicted_points_poly <- reactive({
     data <- load_full_data()
     # Loop through the data and predict the foetal weight
-    predicted_weight <- predict_foetal_weight_poly(data$Maternal_age,
+    predicted_weight <- predict_foetal_weight_poly(
+                                              data$Maternal_age,
                                               data$Maternal_weight,
                                               data$Maternal_height,
                                               data$Parity,
@@ -227,16 +242,17 @@ server <- function(input, output, session) {
       Maternal_height = data$Maternal_height,
       Parity = data$Parity,
       Sex = data$Sex,
-      Gestational_age = data$Gestational_age,  # Convert to weeks here for consistency
+      Gestational_age = data$Gestational_age,
       Foetal_Weight = exp(predicted_weight),
-      Actual_Weight = data$Weight,  # Assume this matches by index/order
-      Residuals = (data$Weight - predicted_weight))  # Squared residuals
+      Actual_Weight = data$Weight,
+      Residuals = (data$Weight - exp(predicted_weight)))
   })
 
   predicted_points_linear <- reactive({
     data <- load_full_data()
     # Loop through the data and predict the foetal weight
-    predicted_weight <- predict_foetal_weight_linear(data$Maternal_age,
+    predicted_weight <- predict_foetal_weight_linear(
+                                              data$Maternal_age,
                                               data$Maternal_weight,
                                               data$Maternal_height,
                                               data$Parity,
@@ -251,58 +267,46 @@ server <- function(input, output, session) {
       Gestational_age = data$Gestational_age,  # Convert to weeks here for consistency
       Foetal_Weight = exp(predicted_weight),
       Actual_Weight = data$Weight,  # Assume this matches by index/order
-      Residuals = (data$Weight - predicted_weight))  # Squared residuals
+      Residuals = (data$Weight - exp(predicted_weight)))
   })
 
-  mse_by_age_poly <- reactive({
+  output$residualsPlotPoly <- renderPlotly({
     df <- predicted_points_poly()
-    df %>%
-      group_by(Gestational_age) %>%
-      summarise(RMSE = sqrt(mean(Residuals, na.rm = TRUE)), .groups = 'drop')  # Calculate MSE per gestational age group
+    if (is.null(df)) {
+      return(NULL)
+    }
+
+    plot <- plot_ly(data = df, x = ~Gestational_age, y = ~Residuals,
+            type = 'scatter', mode = 'markers',
+            marker = list(color = 'rgba(255, 65, 54, 0.8)')) %>%
+      layout(title = "Residuals by Gestational Age for Polynomial Model",
+             xaxis = list(title = "Gestational Age (weeks)"),
+             yaxis = list(title = "Residuals"))
+
+    return(plot)
   })
 
-  mse_by_age_linear <- reactive({
+  # Plot residuals for linear model
+  output$residualsPlotLinear <- renderPlotly({
     df <- predicted_points_linear()
-    df %>%
-      group_by(Gestational_age) %>%
-      summarise(
-        RMSE = ifelse(length(Residuals[!is.na(Residuals)]) > 0, sqrt(mean(Residuals^2, na.rm = TRUE)), NA)
-      )
-  })
+    if (is.null(df)) {
+      return(NULL)
+    }
 
-  # Plot the MSE compared to the gestational age
-  output$msePlotPoly <- renderPlotly({
-    mse_data <- mse_by_age_poly()  # Access the reactive MSE data
-
-    # Create the MSE plot
-    mse_plot <- plot_ly(data = mse_data, x = ~Gestational_age, y = ~RMSE,
-                        type = 'scatter', mode = 'line+markers',
-                        marker = list(color = 'rgba(255, 65, 54, 0.8)')) %>%
-      layout(title = "RMSE by Gestational Age",
+    plot <- plot_ly(data = df, x = ~Gestational_age, y = ~Residuals,
+            type = 'scatter', mode = 'markers',
+            marker = list(color = 'rgba(255, 65, 54, 0.8)')) %>%
+      layout(title = "Residuals by Gestational Age for Linear Model",
              xaxis = list(title = "Gestational Age (weeks)"),
-             yaxis = list(title = "RMSE"))
+             yaxis = list(title = "Residuals"))
 
-    return(mse_plot)
-  })
-
-  output$msePlotLinear <- renderPlotly({
-    mse_data <- mse_by_age_linear()  # Access the reactive MSE data
-
-    # Create the MSE plot
-    mse_plot <- plot_ly(data = mse_data, x = ~Gestational_age, y = ~RMSE,
-                        type = 'scatter', mode = 'line+markers',
-                        marker = list(color = 'rgba(255, 65, 54, 0.8)')) %>%
-      layout(title = "RMSE by Gestational Age",
-             xaxis = list(title = "Gestational Age (weeks)"),
-             yaxis = list(title = "RMSE"))
-
-    return(mse_plot)
+    return(plot)
   })
 
   processed_data <- reactive({
     req(load_full_data())  # Ensure data is loaded
     load_full_data() %>%
-      mutate(Gestational_Age_Group = cut(Gestational_age, breaks = c(0, 22, 33, 36, 45), labels = c("0-22", "22-33", "34-36", "37+")),
+      mutate(Gestational_Age_Group = cut(Gestational_age, breaks = c(0, 22, 33, 36, 45), labels = c("0-22", "23-33", "34-36", "37+")),
              Maternal_Age_Quartile = ntile(Maternal_age, 4))
   })
 
@@ -380,8 +384,7 @@ server <- function(input, output, session) {
       Maternal_weight = quantile(all_data$Maternal_weight, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
       Maternal_height = quantile(all_data$Maternal_height, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
       Parity = unique(all_data$Parity),
-      Sex = unique(all_data$Sex),
-      Group = unique(all_data$Group))
+      Sex = unique(all_data$Sex))
 
     all_data$Weight_Predicted <- exp(predict(model_linear, newdata = all_data))
 
@@ -410,6 +413,49 @@ server <- function(input, output, session) {
       xlab("Actual Weight") +
       ylab("Predicted Weight")
   })
+
+  # Reactive expression to calculate R^2 for polynomial model
+  r2_poly <- reactive({
+    predicted_points <- predicted_points_poly()
+    if (is.null(predicted_points)) {
+      return(NA)  # Return NA if no prediction was made
+    }
+    actual <- predicted_points$Actual_Weight
+    predicted <- predicted_points$Foetal_Weight
+    calculate_r2(actual, predicted)
+  })
+
+  # Reactive expression to calculate R^2 for linear model
+  r2_linear <- reactive({
+    predicted_points <- predicted_points_linear()
+    if (is.null(predicted_points)) {
+      return(NA)  # Return NA if no prediction was made
+    }
+    actual <- predicted_points$Actual_Weight
+    predicted <- predicted_points$Foetal_Weight
+    calculate_r2(actual, predicted)
+  })
+
+  # Output R^2 score for polynomial model
+  output$r2Poly <- renderText({
+    r2_score <- r2_poly()
+    if (is.na(r2_score)) {
+      "R^2 Score: N/A"
+    } else {
+      paste("R^2 Score for Polynomial Model:", format(r2_score, digits = 4))
+    }
+  })
+
+  # Output R^2 score for linear model
+  output$r2Linear <- renderText({
+    r2_score <- r2_linear()
+    if (is.na(r2_score)) {
+      "R^2 Score: N/A"
+    } else {
+      paste("R^2 Score for Linear Model:", format(r2_score, digits = 4))
+    }
+  })
+
 }
 
 shinyApp(ui = ui, server = server)
