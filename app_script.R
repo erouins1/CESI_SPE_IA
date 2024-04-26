@@ -5,8 +5,8 @@ library(dplyr)
 library(readr)
 library(splines)
 library(zoo)
+library(Metrics)
 
-# Function to pull the data from the TreatedData/test_set.csv file into a global variable
 load_data <- function() {
   data <- read_csv("TreatedData/test_set.csv")
   return(data)
@@ -28,7 +28,7 @@ predict_foetal_weight_poly <- function(Maternal_age, Maternal_weight, Maternal_h
   model <- readRDS("./Models/p_c_model.rds")
 
 
-  predictions <- vector("numeric", length(Gestational_age))  # Pre-allocate the vector
+  predictions <- vector("numeric", length(Gestational_age))
   for (i in seq_along(Gestational_age)) {
     data <- data.frame(
       Maternal_age = as.numeric(Maternal_age[i]),
@@ -51,7 +51,7 @@ predict_foetal_weight_linear <- function(Maternal_age, Maternal_weight, Maternal
 
   predictions <- vector("numeric", length(Gestational_age))
   for (i in seq_along(Gestational_age)) {
-    # Check each input to make sure it's not NULL
+
     if (is.null(Maternal_age[i]) || is.null(Maternal_weight[i]) || is.null(Maternal_height[i]) || is.null(Parity[i]) || is.null(Sex[i]))  {
       stop("One of the required parameters is missing a value at index: ", i)
     }
@@ -73,18 +73,18 @@ library(dplyr)
 library(ggplot2)
 
 plot_percentiles <- function(data, data_scatter, predicted_weight, title, color) {
-  # Ensure that data is a dataframe and Weight_Poly_C is present as a column
+
   if("Weight_Predicted" %in% names(data)) {
     data %>%
       group_by(Gestational_age) %>%
       summarise(
-        Weight = mean(Weight_Predicted, na.rm = TRUE),  # Calculate mean weight
-        Percentile1 = quantile(Weight_Predicted, 0.01, na.rm = TRUE),  # 3rd percentile
-        Percentile3 = quantile(Weight_Predicted, 0.03, na.rm = TRUE),  # 3rd percentile
-        Percentile10 = quantile(Weight_Predicted, 0.1, na.rm = TRUE),  # 10th percentile
-        Percentile90 = quantile(Weight_Predicted, 0.9, na.rm = TRUE),  # 90th percentile
-        Percentile97 = quantile(Weight_Predicted, 0.97, na.rm = TRUE),  # 97th percentile
-        Percentile99 = quantile(Weight_Predicted, 0.99, na.rm = TRUE)   # 99th percentile
+        Weight = mean(Weight_Predicted, na.rm = TRUE),
+        Percentile1 = quantile(Weight_Predicted, 0.01, na.rm = TRUE),
+        Percentile3 = quantile(Weight_Predicted, 0.03, na.rm = TRUE),
+        Percentile10 = quantile(Weight_Predicted, 0.1, na.rm = TRUE),
+        Percentile90 = quantile(Weight_Predicted, 0.9, na.rm = TRUE),
+        Percentile97 = quantile(Weight_Predicted, 0.97, na.rm = TRUE),
+        Percentile99 = quantile(Weight_Predicted, 0.99, na.rm = TRUE)
       ) %>%
       ggplot(aes(x = Gestational_age)) +
       geom_point(data = data_scatter, aes(y = Weight), color = "black", size = 1)+
@@ -103,14 +103,36 @@ plot_percentiles <- function(data, data_scatter, predicted_weight, title, color)
 }
 
 calculate_r2 <- function(actual, predicted) {
-  # Calculate the sum of squared residuals
+
   ss_res <- sum((actual - predicted) ^ 2)
-  # Calculate the total sum of squares
+
   ss_tot <- sum((actual - mean(actual)) ^ 2)
-  # Calculate R^2
+
   r2 <- 1 - (ss_res / ss_tot)
   return(r2)
 }
+
+count_extreme_percentiles <- function(percentile_data, count_data) {
+
+  if (!is.numeric(percentile_data) || !is.numeric(count_data)) {
+    stop("Both inputs must be numeric vectors.")
+  }
+
+  p10 <- quantile(percentile_data, 0.1)
+  p90 <- quantile(percentile_data, 0.9)
+
+  count_below_p10 <- sum(count_data < p10)
+  count_above_p90 <- sum(count_data > p90)
+
+  total_count <- length(count_data)
+
+  percent_below_p10 <- (count_below_p10 / total_count) * 100
+  percent_above_p90 <- (count_above_p90 / total_count) * 100
+
+  return(list(below_10th_percentile = percent_below_p10,
+              above_90th_percentile = percent_above_p90))
+}
+
 
 ui <- dashboardPage(
   dashboardHeader(title = "Foetal Weight Prediction"),
@@ -143,15 +165,19 @@ ui <- dashboardPage(
   dashboardBody(
     fluidRow(
       width= 12,
-      box(title = "R^2 Score Polynomial Model", status = "primary", solidHeader = TRUE, width = 6,
-          textOutput("r2Poly")),
-      box(title = "R^2 Score Linear Model", status = "primary", solidHeader = TRUE, width = 6,
-          textOutput("r2Linear"))
+      box(title = "R^2 Score Polynomial Model", status = "primary", solidHeader = TRUE, width = 3, textOutput("r2Poly")),
+      box(title = "Mean Absolute Error Polynomial Model", status = "primary", solidHeader = TRUE, width = 3, textOutput("maePoly")),
+      box(title = "R^2 Score Linear Model", status = "primary", solidHeader = TRUE, width = 3, textOutput("r2Linear")),
+          box(title = "Mean Absolute Error Linear Model", status = "primary", solidHeader = TRUE, width = 3, textOutput("maeLinear")),
     ),
     fluidRow(
       width = 12,
-      box(width = 6, plotlyOutput("c_p_model")),
-      box(width = 6, plotlyOutput("linear_model"))
+        box(width = 6, plotlyOutput("c_p_model")),
+        box(width = 6, plotlyOutput("linear_model"))
+    ),
+    fluidRow(
+        box(width = 6, textOutput("OverExtremesPoly")),
+        box(width = 6, textOutput("OverExtremesLinear"))
     ),
     fluidRow(
       width = 12,
@@ -169,42 +195,42 @@ ui <- dashboardPage(
 
 server <- function(input, output, session) {
   predicted_point_poly <- reactive({
-      # Check all inputs for NULL or missing values
+
       if(is.null(input$MaternalAgeSlider) || is.null(input$MaternalWeightSlider) ||
         is.null(input$MaternalHeightSlider) || is.null(input$MaternalParity) ||
         is.null(input$ChildGender) || is.null(input$GestationalAgeSlider)) {
         return(NULL)
       }
-      # Predict weight using the model
+
       predicted_weight <- predict_foetal_weight_poly(
         Maternal_age = input$MaternalAgeSlider,
         Maternal_weight = input$MaternalWeightSlider,
         Maternal_height = input$MaternalHeightSlider,
         Parity = input$MaternalParity,
         Sex = input$ChildGender,
-        Gestational_age = input$GestationalAgeSlider  # Ensure this is singular or correctly handled if array
+        Gestational_age = input$GestationalAgeSlider
       )
 
-      # Create data frame to return
+
       if (length(predicted_weight) == 0) {
-        return(NULL)  # Return NULL if no prediction was made
+        return(NULL)
       }
 
       data.frame(
         Gestational_age = input$GestationalAgeSlider,
-        Foetal_Weight = exp(predicted_weight),  # Assuming output needs to be exponentiated
-        Actual_Weight = load_data()$Weight  # Make sure load_data() reliably returns a compatible vector
+        Foetal_Weight = exp(predicted_weight),
+        Actual_Weight = load_data()$Weight
       )
   })
 
   predicted_point_linear <- reactive({
-    # Check all inputs for NULL or missing values
+
     if(is.null(input$MaternalAgeSlider) || is.null(input$MaternalWeightSlider) ||
       is.null(input$MaternalHeightSlider) || is.null(input$MaternalParity) ||
       is.null(input$ChildGender) || is.null(input$GestationalAgeSlider)) {
       return(NULL)
     }
-    # Predict weight using the model
+
     predicted_weight <- predict_foetal_weight_linear(
       Maternal_age = input$MaternalAgeSlider,
       Maternal_weight = input$MaternalWeightSlider,
@@ -214,9 +240,9 @@ server <- function(input, output, session) {
       Gestational_age = input$GestationalAgeSlider
     )
 
-    # Create data frame to return
+
     if (length(predicted_weight) == 0) {
-      return(NULL)  # Return NULL if no prediction was made
+      return(NULL)
     }
 
     data.frame(
@@ -228,7 +254,7 @@ server <- function(input, output, session) {
 
   predicted_points_poly <- reactive({
     data <- load_full_data()
-    # Loop through the data and predict the foetal weight
+
     predicted_weight <- predict_foetal_weight_poly(
                                               data$Maternal_age,
                                               data$Maternal_weight,
@@ -264,9 +290,9 @@ server <- function(input, output, session) {
       Maternal_height = data$Maternal_height,
       Parity = data$Parity,
       Sex = data$Sex,
-      Gestational_age = data$Gestational_age,  # Convert to weeks here for consistency
+      Gestational_age = data$Gestational_age,
       Foetal_Weight = exp(predicted_weight),
-      Actual_Weight = data$Weight,  # Assume this matches by index/order
+      Actual_Weight = data$Weight,
       Residuals = (data$Weight - exp(predicted_weight)))
   })
 
@@ -304,31 +330,31 @@ server <- function(input, output, session) {
   })
 
   processed_data <- reactive({
-    req(load_full_data())  # Ensure data is loaded
+    req(load_full_data())
     load_full_data() %>%
       mutate(Gestational_Age_Group = cut(Gestational_age, breaks = c(0, 22, 33, 36, 45), labels = c("0-22", "23-33", "34-36", "37+")),
              Maternal_Age_Quartile = ntile(Maternal_age, 4))
   })
 
   outcomes_by_group <- reactive({
-    req(processed_data())  # Ensure processed data is ready
+    req(processed_data())
     processed_data() %>%
       group_by(Gestational_Age_Group, Maternal_Age_Quartile) %>%
       summarise(Weight = mean(Weight, na.rm = TRUE), .groups = 'drop')
   })
 
-  # Use plot percentiles function to create the plot
+
   output$maternal_age_baby_weight <- renderPlotly({
-    # Ensure data is available
+
     req(outcomes_by_group())
     df <- outcomes_by_group()
 
-    # Check if df is empty
+
     if(nrow(df) == 0) {
-      return(NULL)  # If no data, return nothing
+      return(NULL)
     }
 
-    # Ensure columns are not factors (as this could be part of the problem)
+
     df$Gestational_Age_Group <- as.character(df$Gestational_Age_Group)
     df$Maternal_Age_Quartile <- as.character(df$Maternal_Age_Quartile)
 
@@ -339,10 +365,10 @@ server <- function(input, output, session) {
              yaxis = list(title = "Mean Weight"),
              barmode = 'group')
 
-    # Return the plot
+
     return(plot)
   })
-  # import du modèle p_c_model.rds*
+
   model_p_c <- readRDS("./Models/p_c_model.rds")
   model_linear <- readRDS("./Models/linear_model.rds")
 
@@ -367,7 +393,7 @@ server <- function(input, output, session) {
 
     p <- plot_percentiles(all_data, data, predicted_df, "Polynomial Model: Growth Percentiles", "black")
 
-    # Return the plot
+
     p
   })
 
@@ -390,7 +416,6 @@ server <- function(input, output, session) {
 
     p <- plot_percentiles(all_data, data, predicted_df, "Linear Model: Growth Percentiles", "black")
 
-    # Return the plot
     p
   })
 
@@ -414,29 +439,29 @@ server <- function(input, output, session) {
       ylab("Predicted Weight")
   })
 
-  # Reactive expression to calculate R^2 for polynomial model
+
   r2_poly <- reactive({
     predicted_points <- predicted_points_poly()
     if (is.null(predicted_points)) {
-      return(NA)  # Return NA if no prediction was made
+      return(NA)
     }
     actual <- predicted_points$Actual_Weight
     predicted <- predicted_points$Foetal_Weight
     calculate_r2(actual, predicted)
   })
 
-  # Reactive expression to calculate R^2 for linear model
+
   r2_linear <- reactive({
     predicted_points <- predicted_points_linear()
     if (is.null(predicted_points)) {
-      return(NA)  # Return NA if no prediction was made
+      return(NA)
     }
     actual <- predicted_points$Actual_Weight
     predicted <- predicted_points$Foetal_Weight
     calculate_r2(actual, predicted)
   })
 
-  # Output R^2 score for polynomial model
+
   output$r2Poly <- renderText({
     r2_score <- r2_poly()
     if (is.na(r2_score)) {
@@ -454,6 +479,72 @@ server <- function(input, output, session) {
     } else {
       paste("R^2 Score for Linear Model:", format(r2_score, digits = 4))
     }
+  })
+
+  output$maePoly <- renderText({
+    predicted_points <- predicted_points_poly()
+    if (is.null(predicted_points)) {
+      return(NA)
+    }
+    actual <- predicted_points$Actual_Weight
+    predicted <- predicted_points$Foetal_Weight
+
+    paste("MAE Score for Polynomial Model:", format(mae(actual, predicted), digits = 4))
+  })
+
+    output$maeLinear <- renderText({
+        predicted_points <- predicted_points_linear()
+        if (is.null(predicted_points)) {
+        return(NA)
+        }
+        actual <- predicted_points$Actual_Weight
+        predicted <- predicted_points$Foetal_Weight
+
+        paste("MAE Score for Linear Model:", format(mae(actual, predicted), digits = 4))
+    })
+
+  output$OverExtremesPoly <- renderText({
+    all_data <- load_full_data()
+    data <- all_data
+
+    gestational_age_range <- range(all_data$Gestational_age, na.rm = TRUE)
+
+    all_data <- expand.grid(
+      Gestational_age = seq(gestational_age_range[1], gestational_age_range[2], by = 0.5),
+      Maternal_age = quantile(all_data$Maternal_age, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Maternal_weight = quantile(all_data$Maternal_weight, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Maternal_height = quantile(all_data$Maternal_height, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Parity = unique(all_data$Parity),
+      Sex = unique(all_data$Sex))
+
+    all_data$Weight_Predicted <- exp(predict(model_p_c, newdata = all_data))
+
+    count_extremes <- count_extreme_percentiles(all_data$Weight_Predicted, data$Weight)
+
+    paste("Percentage of babies below 10th percentile: ", count_extremes$below_10th_percentile, "\n",
+          "Percentage of babies above 90th percentile: ", count_extremes$above_90th_percentile)
+  })
+
+  output$OverExtremesLinear <- renderText({
+    all_data <- load_full_data()
+    data <- all_data
+
+    gestational_age_range <- range(all_data$Gestational_age, na.rm = TRUE)
+
+    all_data <- expand.grid(
+      Gestational_age = seq(gestational_age_range[1], gestational_age_range[2], by = 0.5),
+      Maternal_age = quantile(all_data$Maternal_age, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Maternal_weight = quantile(all_data$Maternal_weight, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Maternal_height = quantile(all_data$Maternal_height, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Parity = unique(all_data$Parity),
+      Sex = unique(all_data$Sex))
+
+    all_data$Weight_Predicted <- exp(predict(model_linear, newdata = all_data))
+
+    count_extremes <- count_extreme_percentiles(all_data$Weight_Predicted, data$Weight)
+
+    paste("Percentage of babies below 10th percentile: ", count_extremes$below_10th_percentile, "\n",
+          "Percentage of babies above 90th percentile: ", count_extremes$above_90th_percentile)
   })
 
 }

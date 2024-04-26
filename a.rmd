@@ -577,6 +577,19 @@ print(rmse_p_c)
 ```
 
 ```{r}
+# Calculations of the MAE for all models
+mae_linear <- mean(abs(test_set$Weight - exp(predict(model_linear, newdata = test_set))))
+mae_mixed <- mean(abs(test_set$Weight - exp(predict(model_mixed, newdata = test_set))))
+mae_p_c <- mean(abs(test_set$Weight - exp(predict(model_p_c, newdata = test_set))))
+
+print(mae_linear)
+print(mae_mixed)
+print(mae_p_c)
+
+
+```
+
+```{r}
 # Linear model R2 score for gestational age < 23
 test_set_group1 <- test_set[test_set$Group == 1, ]
 r2_linear_group1 <- cor(test_set_group1$Weight, exp(predict(model_linear, newdata = test_set_group1)))^2
