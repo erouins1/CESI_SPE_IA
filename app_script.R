@@ -381,9 +381,9 @@ server <- function(input, output, session) {
 
     all_data <- expand.grid(
       Gestational_age = seq(gestational_age_range[1], gestational_age_range[2], by = 0.5),
-      Maternal_age = quantile(all_data$Maternal_age, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
-      Maternal_weight = quantile(all_data$Maternal_weight, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
-      Maternal_height = quantile(all_data$Maternal_height, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Maternal_age = quantile(all_data$Maternal_age, probs = c(0.01, 0.03, 0.1, 0.9, 0.97, 0.99), na.rm = TRUE),
+      Maternal_weight = quantile(all_data$Maternal_weight, probs = c(0.01, 0.03, 0.1, 0.9, 0.97, 0.99), na.rm = TRUE),
+      Maternal_height = quantile(all_data$Maternal_height, probs = c(0.01, 0.03, 0.1, 0.9, 0.97, 0.99), na.rm = TRUE),
       Parity = unique(all_data$Parity),
       Sex = unique(all_data$Sex),
       Group = unique(all_data$Group))
@@ -406,9 +406,9 @@ server <- function(input, output, session) {
 
     all_data <- expand.grid(
       Gestational_age = seq(gestational_age_range[1], gestational_age_range[2], by = 0.5),
-      Maternal_age = quantile(all_data$Maternal_age, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
-      Maternal_weight = quantile(all_data$Maternal_weight, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
-      Maternal_height = quantile(all_data$Maternal_height, probs = c(0.01, 0.03, 0.1, 0.97, 0.99), na.rm = TRUE),
+      Maternal_age = quantile(all_data$Maternal_age, probs = c(0.01, 0.03, 0.1, 0.9, 0.97, 0.99), na.rm = TRUE),
+      Maternal_weight = quantile(all_data$Maternal_weight, probs = c(0.01, 0.03, 0.1, 0.9, 0.97, 0.99), na.rm = TRUE),
+      Maternal_height = quantile(all_data$Maternal_height, probs = c(0.01, 0.03, 0.1, 0.9, 0.97, 0.99), na.rm = TRUE),
       Parity = unique(all_data$Parity),
       Sex = unique(all_data$Sex))
 
@@ -519,7 +519,7 @@ server <- function(input, output, session) {
 
     all_data$Weight_Predicted <- exp(predict(model_p_c, newdata = all_data))
 
-    count_extremes <- count_extreme_percentiles(all_data$Weight_Predicted, data$Weight)
+    count_extremes <- count_extreme_percentiles(all_data$Weight_Predicted, all_data$Weight)
 
     paste("Percentage of babies below 10th percentile: ", count_extremes$below_10th_percentile, "\n",
           "Percentage of babies above 90th percentile: ", count_extremes$above_90th_percentile)
@@ -541,7 +541,7 @@ server <- function(input, output, session) {
 
     all_data$Weight_Predicted <- exp(predict(model_linear, newdata = all_data))
 
-    count_extremes <- count_extreme_percentiles(all_data$Weight_Predicted, data$Weight)
+    count_extremes <- count_extreme_percentiles(all_data$Weight_Predicted, all_data$Weight)
 
     paste("Percentage of babies below 10th percentile: ", count_extremes$below_10th_percentile, "\n",
           "Percentage of babies above 90th percentile: ", count_extremes$above_90th_percentile)
