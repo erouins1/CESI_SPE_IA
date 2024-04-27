@@ -6,24 +6,16 @@ library(readr)
 library(splines)
 library(zoo)
 library(Metrics)
+library(ggplot2)
 
-load_data <- function() {
-  data <- read_csv("TreatedData/test_set.csv")
-  return(data)
-}
-
+# Récupération des données traitées par la pipeline stockées dans le fichier data.csv
 load_full_data <- function() {
   full_data <- read_csv("TreatedData/data.csv")
 
   return(full_data)
 }
 
-GroupData <- function (Gestational_age) {
-  Group <- ifelse(Gestational_age < 23, 1, ifelse(Gestational_age < 34, 2, ifelse(Gestational_age < 37, 3, 4)))
-  Group <- as.factor(Group)
-  return(Group)
-}
-
+# Fonction de prédiction du poids fœtal en utilisant le modèle polynomial
 predict_foetal_weight_poly <- function(Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_age) {
   model <- readRDS("./Models/p_c_model.rds")
 
@@ -43,6 +35,7 @@ predict_foetal_weight_poly <- function(Maternal_age, Maternal_weight, Maternal_h
   return(predictions)
 }
 
+# Fonction de prédiction du poids fœtal en utilisant le modèle linéaire
 predict_foetal_weight_linear <- function(Maternal_age, Maternal_weight, Maternal_height, Parity, Sex, Gestational_age) {
   model <- readRDS("./Models/linear_model.rds")
   if (length(Gestational_age) == 0) {
@@ -68,12 +61,10 @@ predict_foetal_weight_linear <- function(Maternal_age, Maternal_weight, Maternal
   return(predictions)
 }
 
-
-library(dplyr)
-library(ggplot2)
-
+# Fonction pour tracer les percentiles de croissance, les valeurs réelles et la valeur prédite
 plot_percentiles <- function(data, data_scatter, predicted_weight, title, color) {
 
+  # Vérifier si la colonne "Weight_Predicted" est présente dans les données et si oui, calculer les percentiles
   if("Weight_Predicted" %in% names(data)) {
     data %>%
       group_by(Gestational_age) %>%
@@ -86,6 +77,8 @@ plot_percentiles <- function(data, data_scatter, predicted_weight, title, color)
         Percentile97 = quantile(Weight_Predicted, 0.97, na.rm = TRUE),
         Percentile99 = quantile(Weight_Predicted, 0.99, na.rm = TRUE)
       ) %>%
+
+      # Tracer les points de données réels et prédits ainsi que les lignes de percentiles
       ggplot(aes(x = Gestational_age)) +
       geom_point(data = data_scatter, aes(y = Weight), color = "black", size = 1)+
       geom_point(data = predicted_weight, aes(y = Foetal_Weight), color = "red", size = 1)+
@@ -102,18 +95,17 @@ plot_percentiles <- function(data, data_scatter, predicted_weight, title, color)
   }
 }
 
+# Fonction pour calculer le coefficient de détermination R^2
 calculate_r2 <- function(actual, predicted) {
-
   ss_res <- sum((actual - predicted) ^ 2)
-
   ss_tot <- sum((actual - mean(actual)) ^ 2)
 
   r2 <- 1 - (ss_res / ss_tot)
   return(r2)
 }
 
+# Fonction pour calculer les erreurs de prédiction MAE
 count_extreme_percentiles <- function(percentile_data, count_data) {
-
   if (!is.numeric(percentile_data) || !is.numeric(count_data)) {
     stop("Both inputs must be numeric vectors.")
   }
@@ -133,9 +125,11 @@ count_extreme_percentiles <- function(percentile_data, count_data) {
               above_90th_percentile = percent_above_p90))
 }
 
-
+# Interface utilisateur de l'application
 ui <- dashboardPage(
+  # En-tête de l'application
   dashboardHeader(title = "Foetal Weight Prediction"),
+  # Sidebar contenant les paramètres d'entrée pour la prédiction du poids fœtal
   dashboardSidebar(
     tags$head(
       tags$style(HTML("
@@ -151,6 +145,7 @@ ui <- dashboardPage(
         }
       "))
     ),
+    # Boîte contenant les paramètres d'entrée
     box(
       width = "100%",
       title = "Input Parameters",
@@ -162,6 +157,7 @@ ui <- dashboardPage(
       sliderInput("GestationalAgeSlider", "Gestational Age (week)", min = 15, max = 45, value = 38),
     )
   ),
+    # Corps de l'application contenant les graphiques et les résultats de prédiction
   dashboardBody(
     fluidRow(
       width= 12,
@@ -193,7 +189,9 @@ ui <- dashboardPage(
   )
 )
 
+# Serveur de l'application
 server <- function(input, output, session) {
+  # Fonction pour prédire le poids fœtal en utilisant le modèle polynomial avec les paramètres d'entrée de l'utilisateur
   predicted_point_poly <- reactive({
 
       if(is.null(input$MaternalAgeSlider) || is.null(input$MaternalWeightSlider) ||
@@ -219,10 +217,11 @@ server <- function(input, output, session) {
       data.frame(
         Gestational_age = input$GestationalAgeSlider,
         Foetal_Weight = exp(predicted_weight),
-        Actual_Weight = load_data()$Weight
+        Actual_Weight = load_full_data()$Weight
       )
   })
 
+  # Fonction pour prédire le poids fœtal en utilisant le modèle linéaire avec les paramètres d'entrée de l'utilisateur
   predicted_point_linear <- reactive({
 
     if(is.null(input$MaternalAgeSlider) || is.null(input$MaternalWeightSlider) ||
@@ -248,10 +247,11 @@ server <- function(input, output, session) {
     data.frame(
       Gestational_age = input$GestationalAgeSlider,
       Foetal_Weight = exp(predicted_weight),
-      Actual_Weight = load_data()$Weight
+      Actual_Weight = load_full_data()$Weight
     )
   })
 
+  # Fonction pour prédire le poids foetal pour toutes les données du jeu de données en utilisant le modèle polynomial
   predicted_points_poly <- reactive({
     data <- load_full_data()
 
@@ -274,6 +274,7 @@ server <- function(input, output, session) {
       Residuals = (data$Weight - exp(predicted_weight)))
   })
 
+  # Fonction pour prédire le poids foetal pour toutes les données du jeu de données en utilisant le modèle linéaire
   predicted_points_linear <- reactive({
     data <- load_full_data()
     # Loop through the data and predict the foetal weight
@@ -296,6 +297,7 @@ server <- function(input, output, session) {
       Residuals = (data$Weight - exp(predicted_weight)))
   })
 
+  # Affichage des résidus pour le modèle polynomial
   output$residualsPlotPoly <- renderPlotly({
     df <- predicted_points_poly()
     if (is.null(df)) {
@@ -312,7 +314,7 @@ server <- function(input, output, session) {
     return(plot)
   })
 
-  # Plot residuals for linear model
+  # Affichage des résidus pour le modèle linéaire
   output$residualsPlotLinear <- renderPlotly({
     df <- predicted_points_linear()
     if (is.null(df)) {
@@ -329,6 +331,7 @@ server <- function(input, output, session) {
     return(plot)
   })
 
+  # Création de groupes d'age gestationnel et de quartiles d'age maternel
   processed_data <- reactive({
     req(load_full_data())
     load_full_data() %>%
@@ -336,6 +339,7 @@ server <- function(input, output, session) {
              Maternal_Age_Quartile = ntile(Maternal_age, 4))
   })
 
+  # Calcul de la moyenne du poids par groupe d'age gestationnel et quartile d'age maternel
   outcomes_by_group <- reactive({
     req(processed_data())
     processed_data() %>%
@@ -343,7 +347,7 @@ server <- function(input, output, session) {
       summarise(Weight = mean(Weight, na.rm = TRUE), .groups = 'drop')
   })
 
-
+  # Affichage du poids moyen par groupe d'age gestationnel et quartile d'age maternel
   output$maternal_age_baby_weight <- renderPlotly({
 
     req(outcomes_by_group())
@@ -354,11 +358,10 @@ server <- function(input, output, session) {
       return(NULL)
     }
 
-
+    # Convertir les variables en caractères pour éviter les erreurs de type
     df$Gestational_Age_Group <- as.character(df$Gestational_Age_Group)
     df$Maternal_Age_Quartile <- as.character(df$Maternal_Age_Quartile)
 
-    # Try creating the plot without dynamic colors first to ensure basic functionality
     plot <- plot_ly(data = df, x = ~Gestational_Age_Group, y = ~Weight, type = 'bar', color = ~Maternal_Age_Quartile) %>%
       layout(title = "Mean Weight by Gestational Age Group and Maternal Age Quartile",
              xaxis = list(title = "Gestational Age Group"),
@@ -369,9 +372,11 @@ server <- function(input, output, session) {
     return(plot)
   })
 
+  # Charger les modèles de prédiction stockés dans les fichiers rds
   model_p_c <- readRDS("./Models/p_c_model.rds")
   model_linear <- readRDS("./Models/linear_model.rds")
 
+  # Affichage des graphiques de prédiction de poids fœtal pour le modèle polynomial
   output$c_p_model <- renderPlotly({
     predicted_df <- predicted_point_poly()
     all_data <- load_full_data()
@@ -397,6 +402,7 @@ server <- function(input, output, session) {
     p
   })
 
+  # Affichage des graphiques de prédiction de poids fœtal pour le modèle linéaire
   output$linear_model <- renderPlotly({
     predicted_df <- predicted_point_linear()
     all_data <- load_full_data()
@@ -419,6 +425,7 @@ server <- function(input, output, session) {
     p
   })
 
+  # Affichage du graphique de comparaison entre les poids prédits et réels pour le modèle polynomial
   output$result_compare_plot_poly <- renderPlotly({
     predicted_points <- predicted_points_poly()
     p <- ggplot(predicted_points, aes(x = Actual_Weight, y = Foetal_Weight)) +
@@ -429,6 +436,7 @@ server <- function(input, output, session) {
       ylab("Predicted Weight")
   })
 
+  # Affichage des graphiques de comparaison des poids prédits et réels pour le modèle linéaire
   output$result_compare_plot_linear <- renderPlotly({
     predicted_points <- predicted_points_linear()
     p <- ggplot(predicted_points, aes(x = Actual_Weight, y = Foetal_Weight)) +
@@ -440,6 +448,7 @@ server <- function(input, output, session) {
   })
 
 
+  # Calcul du coefficient de détermination R^2 pour le modèle polynomial
   r2_poly <- reactive({
     predicted_points <- predicted_points_poly()
     if (is.null(predicted_points)) {
@@ -450,7 +459,7 @@ server <- function(input, output, session) {
     calculate_r2(actual, predicted)
   })
 
-
+  # Calcul du coefficient de détermination R^2 pour le modèle linéaire
   r2_linear <- reactive({
     predicted_points <- predicted_points_linear()
     if (is.null(predicted_points)) {
@@ -461,7 +470,7 @@ server <- function(input, output, session) {
     calculate_r2(actual, predicted)
   })
 
-
+  # Affichage du coefficient de détermination R^2 pour le modèle polynomial
   output$r2Poly <- renderText({
     r2_score <- r2_poly()
     if (is.na(r2_score)) {
@@ -471,7 +480,7 @@ server <- function(input, output, session) {
     }
   })
 
-  # Output R^2 score for linear model
+  # Affichage du coefficient de détermination R^2 pour le modèle linéaire
   output$r2Linear <- renderText({
     r2_score <- r2_linear()
     if (is.na(r2_score)) {
@@ -481,6 +490,7 @@ server <- function(input, output, session) {
     }
   })
 
+  # Calcul de l'erreur de prédiction MAE pour le modèle polynomial
   output$maePoly <- renderText({
     predicted_points <- predicted_points_poly()
     if (is.null(predicted_points)) {
@@ -492,17 +502,19 @@ server <- function(input, output, session) {
     paste("MAE Score for Polynomial Model:", format(mae(actual, predicted), digits = 4))
   })
 
-    output$maeLinear <- renderText({
-        predicted_points <- predicted_points_linear()
-        if (is.null(predicted_points)) {
-        return(NA)
-        }
-        actual <- predicted_points$Actual_Weight
-        predicted <- predicted_points$Foetal_Weight
+  # Calcul de l'erreur de prédiction MAE pour le modèle linéaire
+  output$maeLinear <- renderText({
+    predicted_points <- predicted_points_linear()
+    if (is.null(predicted_points)) {
+    return(NA)
+    }
+    actual <- predicted_points$Actual_Weight
+    predicted <- predicted_points$Foetal_Weight
 
-        paste("MAE Score for Linear Model:", format(mae(actual, predicted), digits = 4))
-    })
+    paste("MAE Score for Linear Model:", format(mae(actual, predicted), digits = 4))
+  })
 
+  # Calcul des pourcentages de bébés en dessous du 10ème et au-dessus du 90ème percentile pour le modèle polynomial
   output$OverExtremesPoly <- renderText({
     all_data <- load_full_data()
     data <- all_data
@@ -525,6 +537,7 @@ server <- function(input, output, session) {
           "Percentage of babies above 90th percentile: ", count_extremes$above_90th_percentile)
   })
 
+  # Calcul des pourcentages de bébés en dessous du 10ème et au-dessus du 90ème percentile pour le modèle linéaire
   output$OverExtremesLinear <- renderText({
     all_data <- load_full_data()
     data <- all_data
@@ -549,4 +562,5 @@ server <- function(input, output, session) {
 
 }
 
+# Lancer l'application shiny
 shinyApp(ui = ui, server = server)
