@@ -13,16 +13,16 @@ knitr::opts_chunk$set(cache = FALSE, autodep = TRUE)
 
 ```
 ```{r}
-# List all cv files in the directory Data
-csv_files <- fs::dir_ls("./RawData", regexp = "\\.csv$") # nolint: line_length_linter.
+# Listing des fichiers
+csv_files <- fs::dir_ls("./RawData", regexp = "\\.csv$")
 
-# Check if files are detected
+# Vérification de la présence de fichiers
 if (length(csv_files) == 0) {
   message("No CSV files found in the directory.")
 }
 
 
-# Read all cv files
+# Lecture des fichiers CSV
 csv_data <- csv_files %>%
         map_dfr(~ read_csv(.x, col_types = cols()))
 
@@ -105,12 +105,9 @@ df <- df %>% filter(Maternal_weight != 0)
 zero_counts <- colSums(df == 0)
 print(zero_counts)
 ```
-```{r}
-# Checking for duplicated lines
-duplicated_rows <- df[duplicated(df), ]
-print(duplicated_rows)
-print(nrow(duplicated_rows))
-```
+---
+Nous traçons des boxplots pour chaque colonne afin de visualiser les valeurs aberrantes.
+---
 ```{r}
 boxplot(df$Maternal_age, main = "Maternal age", ylab = "Y-axis Label")
 boxplot(df$Maternal_weight, main = "Maternal weight", ylab = "Y-axis Label")
@@ -126,7 +123,7 @@ L'écart étant très grand, nous allons supprimer les valeurs aberrantes.
 Avec seulement quelques données à la valeur élevée, il y aurait un risque que le modèle ne soit pas capable de généraliser correctement et ne sache pas comment traiter ces valeurs.
 ---
 ```{r}
-#Deleting entries with Parity greater than or equal to 5
+# Suppression des lignes avec Parité d'au moins 5
 df <- df %>% filter(Parity < 5)
 boxplot(df$Parity, main = "Parity", ylab = "Y-axis Label")
 ```
@@ -228,15 +225,15 @@ Sa valeur, de 1 à 4, dépend de la période de gestation.
 df <- df %>%
   mutate(Gestational_age = ceiling(Gestational_age / 7))
 
-# Assigning a group to each line according to the gestational age
-# Group 1 for gestational age : <23
-# Group 2 for gestational age : 23-33
-# Group 3 for gestational age : 34-36
-# Group 4 for gestational age : >36
+# Assignement d'un groupe à chaque ligne selon l'age gestationnel
+# Group 1 : <23
+# Group 2 : 23-33
+# Group 3 : 34-36
+# Group 4 : >36
 df$Group <- ifelse(df$Gestational_age < 23, 1, ifelse(df$Gestational_age < 34, 2, ifelse(df$Gestational_age < 37, 3, 4)))
 df$Group <- as.factor(df$Group)
 
-# vérifie que le fichier data.csv existe déjà
+# Vérifie que le fichier data.csv existe déjà
 if (!file.exists("TreatedData/data.csv")) {
   write.csv(df, "TreatedData/data.csv", row.names = FALSE)
 }
@@ -288,16 +285,16 @@ ggplot(df, aes(x = Gestational_age, y = Weight, color = Parity)) +
 ```{r}
 library(caret)
 
-set.seed(123) # for reproducibility
+set.seed(123)
 splitIndex <- createDataPartition(df$Weight, p = 0.8, list = FALSE)
 
-# Create training and testing datasets
+# Création des ensembles d'entraînement et de test
 train_set <- df[splitIndex, ]
 test_set <- df[-splitIndex, ]
 
 ```
 ```{r}
-# Cross-validation setup
+# Mise en place de la cross-validation
 
 train_control <- trainControl(
   method = "cv",
@@ -306,7 +303,7 @@ train_control <- trainControl(
 ```
 ```{r}
 
-# Fit the model using cross-validation
+# Fitting du modèle avec cross-validation
 model_linear <- train(
   log(Weight) ~ Maternal_age + Maternal_weight + Maternal_height + Parity + Sex + Gestational_age,
   data = train_set,
@@ -314,15 +311,15 @@ model_linear <- train(
   trControl = train_control
 )
 
-# Summary of the model
+# Affichage du summary
 summary(model_linear)
 
-# Evaluate the model on the testing dataset
+# Evaluation du modèle sur le jeu de test
 predictions <- exp(predict(model_linear, newdata = test_set))
 test_mse <- mean((test_set$Weight - predictions)^2)
 print(test_mse)
 
-# Export the model to a file
+# Export du modèle dans un fichier rds
 saveRDS(model_linear, "Models/linear_model.rds")
 ```
 ```{r}
@@ -334,7 +331,7 @@ model_p_c <- train(
   method = "lm",
   trControl = train_control
 )
-# Résumé du modèle
+# Affichage du summary
 summary(model_p_c)
 
 # Test de Kolmogorov-Smirnov avec la distribution normale
@@ -350,17 +347,17 @@ predictions <- exp(predict(model_p_c, newdata = test_set))
 test_mse <- mean((test_set$Weight - predictions)^2)
 print(test_mse)
 
-# Export the model to a file
+# Export du modèle dans un fichier rds
 saveRDS(model_p_c, "Models/p_c_model.rds")
 ```
 
 
 
 ```{r}
-# Mixed linear model
+# Modèle linéaire mixte
 library(lme4)
 
-# Cross-validation setup
+# Mise en place manuelle de la cross-validation
 set.seed(123)
 n_folds <- 5
 folds <- sample(rep(1:n_folds, length.out = nrow(train_set)))
@@ -371,20 +368,19 @@ for (i in 1:n_folds) {
   test_indices <- which(folds == i)
   train_indices <- setdiff(1:nrow(train_set), test_indices)
 
-  # Subset the data
   training_data <- train_set[train_indices, ]
   testing_data <- train_set[test_indices, ]
 
-  # Fit the model on training data
+  # Fitting du modèle sur le jeu d'entraînement
   model_mixed <- lmer(log(Weight) ~ Maternal_age + Maternal_weight + Maternal_height +
     Parity + Sex + Gestational_age + (1 | Group), data = training_data)
 
-  # Predict and calculate MSE on the testing fold
+  # Prédictions sur le jeu de test et calcul du MSE
   predictions <- exp(predict(model_mixed, newdata = testing_data))
   mse_results[i] <- mean((testing_data$Weight - predictions)^2)
 }
 
-# Calculate the average MSE over all folds
+# Calculs du MSE moyen
 average_mse <- mean(mse_results)
 print(average_mse)
 
@@ -393,7 +389,7 @@ final_test_mse <- mean((test_set$Weight - predictions_final)^2)
 print(final_test_mse)
 
 
-# Export the mixed model to a file
+# Export du modèle dans un fichier rds
 saveRDS(model_mixed, "Models/mixed_linear_model.rds")
 ```
 
@@ -401,7 +397,7 @@ saveRDS(model_mixed, "Models/mixed_linear_model.rds")
 library(ggplot2)
 library(dplyr)
 
-# Create a grid of data to simulate a wider variety of input scenarios
+# Création d'une grille de données pour simuler une large variété de scénarios
 
 simulated_data <- expand.grid(
         Gestational_age = seq(min(df$Gestational_age), max(df$Gestational_age), by = 0.5),
@@ -413,13 +409,13 @@ simulated_data <- expand.grid(
         Group = factor(levels(df$Group))
 )
 
-# Predict weights for the entire grid for all models
+# Prédiction des poids pour l'ensemble de la grille pour tous les modèles
 simulated_data$Weight_Linear <- exp(predict(model_linear, newdata = simulated_data))
 simulated_data$Weight_Poly_C <- exp(predict(model_p_c, newdata = simulated_data))
 simulated_data$Weight_Mixed <- exp(predict(model_mixed, newdata = simulated_data))
 
 
-# Function to calculate and plot percentiles
+# Calcul et affichage des percentiles
 plot_percentiles <- function(data, weight_col, title, color) {
   data %>%
           group_by(Gestational_age) %>%
@@ -443,7 +439,7 @@ plot_percentiles <- function(data, weight_col, title, color) {
           labs(title = title, y = "Predicted Weight", x = "Gestational Age")
 }
 
-# Plot percentiles for both models
+# Plot des percentiles pour tous les modèles
 p_linear <- plot_percentiles(simulated_data, "Weight_Linear", "Linear Model: Growth Percentiles", "black")
 p_poly_c <- plot_percentiles(simulated_data, "Weight_Poly_C", "Polynomial Model: Growth Percentiles", "black")
 p_mixed <- plot_percentiles(simulated_data, "Weight_Mixed", "Mixed Linear Model: Growth Percentiles", "black")
@@ -452,7 +448,7 @@ p_mixed <- plot_percentiles(simulated_data, "Weight_Mixed", "Mixed Linear Model:
 
 ```{r}
 
-# Calculate average weights for each gestational age for all models
+# Calculs des poids moyens pour chaque modèle par âge gestationnel
 comparison_data <- simulated_data %>%
         group_by(Gestational_age) %>%
         summarise(
@@ -461,7 +457,7 @@ comparison_data <- simulated_data %>%
                 Average_Weight_Mixed = mean(Weight_Mixed, na.rm = TRUE)
         )
 
-# Plot graph with curves from all models
+# Plot du graphique de comparaison entre les modèles
 p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
         geom_line(aes(y = Average_Weight_Linear, colour = "Linear Model"), size = 1.2) +
         geom_line(aes(y = Average_Weight_Poly_C, colour = "Polynomial C Model"), size = 1.2) +
@@ -472,7 +468,7 @@ p_comparison <- ggplot(comparison_data, aes(x = Gestational_age)) +
              colour = "Model Type")
 
 
-# Print plots
+# Affichage des graphiques
 print(p_linear)
 print(p_poly_c)
 print(p_mixed)
@@ -480,25 +476,25 @@ print(p_comparison)
 ```
 
 ```{r}
-# Predicted label vs actual label comparison for the linear model
+# Comparaison entre labels prédits et labels réels pour le modèle linéaire
 comparison_data_linear <- data.frame(
         Actual = test_set$Weight,
         Predicted = exp(predict(model_linear, newdata = test_set))
 )
 
-# Predicted label vs actual label comparison for the mixed linear model
+# Comparaison entre labels prédits et labels réels pour le modèle linéaire mixte
 comparison_data_mixed <- data.frame(
         Actual = test_set$Weight,
         Predicted = exp(predict(model_mixed, newdata = test_set))
 )
 
-# Predicted label vs actual label comparison for the poly-c model
+# Comparaison entre labels prédits et labels réels pour le modèle polynomial
 comparison_data_p_c <- data.frame(
         Actual = test_set$Weight,
         Predicted = exp(predict(model_p_c, newdata = test_set))
 )
 
-# Plot the comparison
+# Plot des comparaisons
 p_comparison_linear <- ggplot(comparison_data_linear, aes(x = Actual, y = Predicted)) +
         geom_point() +
         geom_abline(intercept = 0, slope = 1, color = "red") +
@@ -520,27 +516,33 @@ p_comparison_p_c <- ggplot(comparison_data_p_c, aes(x = Actual, y = Predicted)) 
         xlab("Actual Weight") +
         ylab("Predicted Weight")
 
-# Print plots
+# Affichage des plots
 print(p_comparison_linear)
 print(p_comparison_mixed)
 print(p_comparison_p_c)
 ```
+---
+Nous pouvons émettre de premières hypothèses sur la qualité des modèles en observant les graphiques de comparaison entre les valeurs prédites et les valeurs réelles.
+
+Le modèle linéaire semble être le moins précis, avec une dispersion importante. Néanmoins, nous pouvons remarquer une bonne précision sur les poids (et donc âges gestationnels) faibles.
+En arrivant à des valeurs plus élevées, la dispersion devient élevée. Le modèles à tendance à créer des plateaux.
+
+Le modèles linéaire mixte semble relativement précis sur toute la plage de valeurs.
+Néanmoins, suite à d'autres essais peu concluants sur ses performances et des soucis d'implémentation dans notre interface, nous mettrons ce modèle de côté par la suite. Nous souhaitions tout de même le tester et le présenter pour montrer les différentes possibilités de modèles, et voir si un modèle plus complexe prenant en compte des groupes d'âge gestationnel pouvait être plus performant.
+
+Le modèle polynomial, lui, semble le plus performant. Faible dispersion et précis sur toute la plage de valeurs. Il semble être le meilleur modèle pour prédire le poids des foetus.
+
+Nous allons vérifier cela.
+---
 ```{r}
-# Residuals for all models
+# Calculs des résidus pour tous les modèles
 residuals_linear <- residuals(model_linear)
-residuals_mixed <- residuals(model_mixed)
 residuals_p_c <- residuals(model_p_c)
 
-# Plot residuals for all models
+# Plot des résidus
 p_residuals_linear <- ggplot(data.frame(Residuals = residuals_linear), aes(x = Residuals)) +
         geom_histogram(bins = 30, fill = "blue") +
         ggtitle("Linear Model: Residuals Distribution") +
-        xlab("Residuals") +
-        ylab("Frequency")
-
-p_residuals_mixed <- ggplot(data.frame(Residuals = residuals_mixed), aes(x = Residuals)) +
-        geom_histogram(bins = 30, fill = "green") +
-        ggtitle("Mixed Linear Model: Residuals Distribution") +
         xlab("Residuals") +
         ylab("Frequency")
 
@@ -550,127 +552,114 @@ p_residuals_p_c <- ggplot(data.frame(Residuals = residuals_p_c), aes(x = Residua
         xlab("Residuals") +
         ylab("Frequency")
 
-# Print plots
+# Affichage des plots
 print(p_residuals_linear)
-print(p_residuals_mixed)
 print(p_residuals_p_c)
 ```
 ```{r}
-# Calculations of the R2 scores for all models
+# Calculs des scores R2 pour tous les modèles
 r2_linear <- cor(test_set$Weight, exp(predict(model_linear, newdata = test_set)))^2
-r2_mixed <- cor(test_set$Weight, exp(predict(model_mixed, newdata = test_set)))^2
 r2_p_c <- cor(test_set$Weight, exp(predict(model_p_c, newdata = test_set)))^2
 
 print(r2_linear)
-print(r2_mixed)
 print(r2_p_c)
 ```
 ```{r}
-# Calculations of the RMSE for all models
+# Calculs des RMSE pour tous les modèles
 rmse_linear <- sqrt(mean((test_set$Weight - exp(predict(model_linear, newdata = test_set)))^2))
-rmse_mixed <- sqrt(mean((test_set$Weight - exp(predict(model_mixed, newdata = test_set)))^2))
 rmse_p_c <- sqrt(mean((test_set$Weight - exp(predict(model_p_c, newdata = test_set)))^2))
 
 print(rmse_linear)
-print(rmse_mixed)
 print(rmse_p_c)
 ```
 
 ```{r}
-# Calculations of the MAE for all models
+# Calculs des MAE pour tous les modèles
 mae_linear <- mean(abs(test_set$Weight - exp(predict(model_linear, newdata = test_set))))
-mae_mixed <- mean(abs(test_set$Weight - exp(predict(model_mixed, newdata = test_set))))
 mae_p_c <- mean(abs(test_set$Weight - exp(predict(model_p_c, newdata = test_set))))
 
 print(mae_linear)
-print(mae_mixed)
 print(mae_p_c)
 
 
 ```
 
 ```{r}
-# Linear model R2 score for gestational age < 23
+# Création des ensembles de test pour chaque groupe d'âge gestationnel
 test_set_group1 <- test_set[test_set$Group == 1, ]
-r2_linear_group1 <- cor(test_set_group1$Weight, exp(predict(model_linear, newdata = test_set_group1)))^2
-
-# Linear model R2 score for gestational age 23-33
 test_set_group2 <- test_set[test_set$Group == 2, ]
-r2_linear_group2 <- cor(test_set_group2$Weight, exp(predict(model_linear, newdata = test_set_group2)))^2
-
-# Linear model R2 score for gestational age 34-36
 test_set_group3 <- test_set[test_set$Group == 3, ]
-r2_linear_group3 <- cor(test_set_group3$Weight, exp(predict(model_linear, newdata = test_set_group3)))^2
-
-# Linear model R2 score for gestational age > 36
 test_set_group4 <- test_set[test_set$Group == 4, ]
-r2_linear_group4 <- cor(test_set_group4$Weight, exp(predict(model_linear, newdata = test_set_group4)))^2
+```
+```{r}
+# Modèle linéaire
+# RMSE pour chaque groupes d'âge gestationnel
+rmse_linear_group1 <- sqrt(mean((test_set_group1$Weight - exp(predict(model_linear, newdata = test_set_group1)))^2))
 
-print(r2_linear_group1)
-print(r2_linear_group2)
-print(r2_linear_group3)
-print(r2_linear_group4)
+rmse_linear_group2 <- sqrt(mean((test_set_group2$Weight - exp(predict(model_linear, newdata = test_set_group2)))^2))
+
+rmse_linear_group3 <- sqrt(mean((test_set_group3$Weight - exp(predict(model_linear, newdata = test_set_group3)))^2))
+
+rmse_linear_group4 <- sqrt(mean((test_set_group4$Weight - exp(predict(model_linear, newdata = test_set_group4)))^2))
+
+print(rmse_linear_group1)
+print(rmse_linear_group2)
+print(rmse_linear_group3)
+print(rmse_linear_group4)
 ```
 
 ```{r}
-# Polynomial C model R2 score for gestational age < 23
-r2_p_c_group1 <- cor(test_set_group1$Weight, exp(predict(model_p_c, newdata = test_set_group1)))^2
+# Modèle polynomial
+# RMSE pour chaque groupe d'âge gestationnel
+rmse_p_c_group1 <- sqrt(mean((test_set_group1$Weight - exp(predict(model_p_c, newdata = test_set_group1)))^2))
 
-# Polynomial C model R2 score for gestational age 23-33
-r2_p_c_group2 <- cor(test_set_group2$Weight, exp(predict(model_p_c, newdata = test_set_group2)))^2
+rmse_p_c_group2 <- sqrt(mean((test_set_group2$Weight - exp(predict(model_p_c, newdata = test_set_group2)))^2))
 
-# Polynomial C model R2 score for gestational age 34-36
-r2_p_c_group3 <- cor(test_set_group3$Weight, exp(predict(model_p_c, newdata = test_set_group3)))^2
+rmse_p_c_group3 <- sqrt(mean((test_set_group3$Weight - exp(predict(model_p_c, newdata = test_set_group3)))^2))
 
-# Polynomial C model R2 score for gestational age > 36
-r2_p_c_group4 <- cor(test_set_group4$Weight, exp(predict(model_p_c, newdata = test_set_group4)))^2
+rmse_p_c_group4 <- sqrt(mean((test_set_group4$Weight - exp(predict(model_p_c, newdata = test_set_group4)))^2))
 
-print(r2_p_c_group1)
-print(r2_p_c_group2)
-print(r2_p_c_group3)
-print(r2_p_c_group4)
+print(rmse_p_c_group1)
+print(rmse_p_c_group2)
+print(rmse_p_c_group3)
+print(rmse_p_c_group4)
 ```
+---
+## Conclusion
+Le modèle polynomial est le plus performant et celui qui est recommandé pour la prédiction du poids des foetus.
+
+Il est supérieur sur toutes les métriques par rapport au modèle linéaire.
+Il l'était également par rapport au modèle linéaire mixte d'après nos essais.
+
+Avec un R2 de 0.95, un RMSE de 270 et un MAE de 183, il prouve être fiable et précis.
+La différence entre RMSE et MAE est faible (moins de 100), ce qui prouve que le modèle est stable et ne fait pas de prédictions aberrantes.
+
+Nous avons également rapidement comparé les performances des modèles sur différents groupes d'âge gestationnel. Il y avait une possibilité que le modèle linéaire soit plus performant sur le groupe 1. Cela n'a pas été le cas, le modèle polynomial étant supérieur sur tous les groupes.
+
+La partie suivante permet de vérifier si nos percentiles sont cohérents.
+Le but est d'avoir 10% sous 10% et 10% au-dessus de 90%.
+Nous vérifierons sur le modèle polynomial uniquement, étant celui qui est retenu.
+---
 
 ```{r}
-# Amount of foetuses over 90th percentile according to our polynomial model
+# Test des percentiles
 test_set$Predicted_Weight_Poly_C <- exp(predict(model_p_c, newdata = test_set))
 test_set$Predicted_Weight_Poly_C <- as.numeric(test_set$Predicted_Weight_Poly_C)
 test_set$Weight <- as.numeric(test_set$Weight)
 
+# Nombre de fétus au-dessus du 90ème percentile pour le modèle polynomial
 test_set$Over_90th_Percentile <- ifelse(test_set$Predicted_Weight_Poly_C > quantile(test_set$Predicted_Weight_Poly_C, 0.9), 1, 0)
 over_90th_percentile <- sum(test_set$Over_90th_Percentile)
 print(over_90th_percentile)
 
-# Amount of foetuses under 10th percentile according to our polynomial model
+# Nombre de fétus en-dessous du 10ème percentile pour le modèle polynomial
 test_set$Under_10th_Percentile <- ifelse(test_set$Predicted_Weight_Poly_C < quantile(test_set$Predicted_Weight_Poly_C, 0.1), 1, 0)
 under_10th_percentile <- sum(test_set$Under_10th_Percentile)
 print(under_10th_percentile)
-```
 
-```{r}
-# To assess the performance of the percentile growth curves, it is necessary to estimate the rate of weights that fall above or below a percentile curve.
-test_set$Predicted_Weight_Poly_C <- exp(predict(model_p_c, newdata = test_set))
-test_set$Predicted_Weight_Poly_C <- as.numeric(test_set$Predicted_Weight_Poly_C)
-test_set$Weight <- as.numeric(test_set$Weight)
-
-test_set$Over_90th_Percentile <- ifelse(test_set$Predicted_Weight_Poly_C > quantile(test_set$Predicted_Weight_Poly_C, 0.9), 1, 0)
-over_90th_percentile <- sum(test_set$Over_90th_Percentile)
-
-
-# Value in percentage
+# Valeurs en pourcentage
 over_90th_percentile_percent <- over_90th_percentile / nrow(test_set) * 100
-
-print(over_90th_percentile)
-print(over_90th_percentile_percent)
-
-# Amount of foetuses under 10th percentile according to our polynomial model
-test_set$Under_10th_Percentile <- ifelse(test_set$Predicted_Weight_Poly_C < quantile(test_set$Predicted_Weight_Poly_C, 0.1), 1, 0)
-under_10th_percentile <- sum(test_set$Under_10th_Percentile)
-
-# Value in percentage
 under_10th_percentile_percent <- under_10th_percentile / nrow(test_set) * 100
-
-print(under_10th_percentile)
+print(over_90th_percentile_percent)
 print(under_10th_percentile_percent)
 ```
-
